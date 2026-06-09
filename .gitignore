@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment variables — NEVER commit these
+.env
+**/.env
+
+# Build output
+dist/
+build/
+.next/
+
+# Prisma
+backend/prisma/migrations/
+
+# Generated PDFs (runtime files)
+backend/storage/pdfs/*.pdf
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Mobile
+mobile/node_modules/
+mobile/.expo/

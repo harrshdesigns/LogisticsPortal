@@ -1,0 +1,181 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum ServiceType {
+  SURFACE
+  AIR
+  EXPRESS
+}
+
+enum PaymentType {
+  PREPAID
+  COD
+  TO_PAY
+}
+
+enum OrderStatus {
+  PENDING
+  ASSIGNED
+  BOOKED
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  EXCEPTION
+  CANCELLED
+}
+
+enum PartnerName {
+  DELHIVERY
+  DP_WORLD
+  VRL
+  DTDC
+  MANUAL
+}
+
+enum TrackingSource {
+  API
+  MANUAL
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  company   String?
+  gstin     String?
+  phone     String?
+  role      Role     @default(CUSTOMER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  addresses  Address[]
+  orders     Order[]
+  invoices   Invoice[]
+  adminRole  AdminRole?
+  bookedShipments Shipment[] @relation("BookedByAdmin")
+}
+
+model Address {
+  id          String  @id @default(uuid())
+  userId      String
+  label       String
+  contactName String
+  phone       String
+  addressLine1 String
+  addressLine2 String?
+  city        String
+  state       String
+  pincode     String
+  isDefault   Boolean @default(false)
+  createdAt   DateTime @default(now())
+
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id                    String      @id @default(uuid())
+  clientDocketNo        String      @unique
+  userId                String
+  pickupAddressSnapshot Json
+  deliveryAddressSnapshot Json
+  commodity             String
+  weight                Float
+  dimensions            Json
+  declaredValue         Float
+  serviceType           ServiceType
+  paymentType           PaymentType
+  specialInstructions   String?
+  status                OrderStatus @default(PENDING)
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id])
+  shipment  Shipment?
+}
+
+model Shipment {
+  id              String      @id @default(uuid())
+  orderId         String      @unique
+  partnerName     PartnerName
+  partnerDocketNo String?
+  bookingResponse Json?
+  bookedAt        DateTime?
+  bookedByAdminId String?
+
+  order           Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  bookedByAdmin   User?           @relation("BookedByAdmin", fields: [bookedByAdminId], references: [id])
+  trackingEvents  TrackingEvent[]
+}
+
+model TrackingEvent {
+  id          String         @id @default(uuid())
+  shipmentId  String
+  status      String
+  description String
+  location    String?
+  timestamp   DateTime
+  source      TrackingSource @default(MANUAL)
+  createdAt   DateTime       @default(now())
+
+  shipment    Shipment       @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+}
+
+model Invoice {
+  id          String        @id @default(uuid())
+  invoiceNo   String        @unique
+  userId      String
+  dateFrom    DateTime
+  dateTo      DateTime
+  lineItems   Json
+  subtotal    Float
+  tax         Float
+  totalAmount Float
+  pdfUrl      String?
+  status      InvoiceStatus @default(DRAFT)
+  createdAt   DateTime      @default(now())
+  sentAt      DateTime?
+
+  user        User          @relation(fields: [userId], references: [id])
+}
+
+model MISReport {
+  id         String   @id @default(uuid())
+  reportDate DateTime
+  pdfUrl     String?
+  sentAt     DateTime?
+  createdAt  DateTime @default(now())
+}
+
+model AdminRole {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  permissions Json
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Counter {
+  id    String @id
+  value Int    @default(0)
+}
