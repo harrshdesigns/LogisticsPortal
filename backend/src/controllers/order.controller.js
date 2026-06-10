@@ -14,7 +14,8 @@ async function createOrder(req, res) {
       serviceType, appointmentDelivery, carrierRisk, ownersRisk, mallDelivery,
       actualWeight, itemDescription, packages, packagesType, unitWeight,
       dimensionL, dimensionW, dimensionH, dimensionUnit,
-      paymentType, codPayeeName, notes,
+      paymentType, codPayeeName, codAmount, notes,
+      invoiceValue, invoiceNo, invoiceDate, ewayBillNo, hsnCode, quantity,
     } = req.body;
 
     if (!consignorName || !consigneeName || !serviceType || !paymentType) {
@@ -47,6 +48,13 @@ async function createOrder(req, res) {
         dimensionUnit: dimensionUnit || 'CMS',
         paymentType,
         codPayeeName: paymentType === 'COD' ? codPayeeName : null,
+        codAmount: codAmount ? parseFloat(codAmount) : null,
+        invoiceValue: invoiceValue ? parseFloat(invoiceValue) : null,
+        invoiceNo: invoiceNo || null,
+        invoiceDate: invoiceDate ? new Date(invoiceDate) : null,
+        ewayBillNo: ewayBillNo || null,
+        hsnCode: hsnCode || null,
+        quantity: quantity ? parseInt(quantity) : null,
         notes,
         status: 'PENDING',
       },

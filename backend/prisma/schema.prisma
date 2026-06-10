@@ -16,13 +16,31 @@ enum Role {
 enum ServiceType {
   SURFACE
   AIR
+  WATER
   EXPRESS
 }
 
 enum PaymentType {
   PREPAID
-  COD
   TO_PAY
+  TO_BILL
+  COD
+}
+
+enum PackageType {
+  PACKAGES
+  BOXES
+  BAGS
+}
+
+enum DimensionUnit {
+  INCHES
+  CMS
+}
+
+enum PickupOption {
+  PICKUP_FROM_CONSIGNOR
+  DROP_AT_BRANCH
 }
 
 enum OrderStatus {
@@ -68,63 +86,131 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  addresses  Address[]
-  orders     Order[]
-  invoices   Invoice[]
-  adminRole  AdminRole?
+  addresses       Address[]
+  orders          Order[]
+  invoices        Invoice[]
+  adminRole       AdminRole?
   bookedShipments Shipment[] @relation("BookedByAdmin")
 }
 
 model Address {
-  id          String  @id @default(uuid())
-  userId      String
-  label       String
-  contactName String
-  phone       String
+  id           String  @id @default(uuid())
+  userId       String
+  label        String
+  companyName  String?
+  contactName  String
+  phone        String
+  email        String?
   addressLine1 String
   addressLine2 String?
-  city        String
-  state       String
-  pincode     String
-  isDefault   Boolean @default(false)
-  createdAt   DateTime @default(now())
+  city         String
+  state        String
+  pincode      String
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
 
-  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Order {
-  id                    String      @id @default(uuid())
-  clientDocketNo        String      @unique
-  userId                String
-  pickupAddressSnapshot Json
-  deliveryAddressSnapshot Json
-  commodity             String
-  weight                Float
-  dimensions            Json
-  declaredValue         Float
-  serviceType           ServiceType
-  paymentType           PaymentType
-  specialInstructions   String?
-  status                OrderStatus @default(PENDING)
-  createdAt             DateTime    @default(now())
-  updatedAt             DateTime    @updatedAt
+  id             String      @id @default(uuid())
+  clientDocketNo String      @unique
+  userId         String?
+  isDirectBooking Boolean    @default(false)
 
-  user      User      @relation(fields: [userId], references: [id])
-  shipment  Shipment?
+  // Consignor Details
+  consignorName         String?
+  consignorPin          String?
+  consignorAddressLine1 String?
+  consignorAddressLine2 String?
+  consignorCity         String?
+  consignorState        String?
+  consignorContactPerson String?
+  consignorPhone        String?
+  consignorEmail        String?
+
+  // Consignee Details
+  consigneeName         String?
+  consigneePin          String?
+  consigneeAddressLine1 String?
+  consigneeAddressLine2 String?
+  consigneeCity         String?
+  consigneeState        String?
+  consigneeContactPerson String?
+  consigneePhone        String?
+  consigneeEmail        String?
+
+  // Service & Delivery Options
+  serviceType         ServiceType
+  appointmentDelivery Boolean     @default(false)
+  carrierRisk         Boolean     @default(false)
+  ownersRisk          Boolean     @default(false)
+  mallDelivery        Boolean     @default(false)
+
+  // Weight & Item Details
+  actualWeight   Float?
+  itemDescription String?
+  packages       Int?
+  packagesType   PackageType   @default(BAGS)
+  unitWeight     Float?
+  dimensionL     Float?
+  dimensionW     Float?
+  dimensionH     Float?
+  dimensionUnit  DimensionUnit @default(CMS)
+
+  // Payment
+  paymentType  PaymentType
+  codPayeeName String?
+  codAmount    Float?
+
+  // Invoice / Commercial Details
+  invoiceValue Float?
+  invoiceNo    String?
+  invoiceDate  DateTime?
+  ewayBillNo   String?
+  hsnCode      String?
+  quantity     Int?
+
+  // Notes
+  notes String?
+
+  // Legacy fields (kept for backward compat)
+  pickupAddressSnapshot   Json?
+  deliveryAddressSnapshot Json?
+  commodity               String?
+  weight                  Float?
+  dimensions              Json?
+  declaredValue           Float?
+  specialInstructions     String?
+
+  status    OrderStatus @default(PENDING)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  user     User?     @relation(fields: [userId], references: [id])
+  shipment Shipment?
 }
 
 model Shipment {
-  id              String      @id @default(uuid())
-  orderId         String      @unique
+  id              String       @id @default(uuid())
+  orderId         String       @unique
   partnerName     PartnerName
   partnerDocketNo String?
+  loginId         String?
+  docketDate      DateTime?
+  pickupOption    PickupOption?
+  billToParty     String?
+  materialHold    Boolean      @default(false)
+  waitingPermit   Boolean      @default(false)
+  deliveryCode    String?
+  checkedRates    Json?
   bookingResponse Json?
   bookedAt        DateTime?
   bookedByAdminId String?
 
-  order           Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  bookedByAdmin   User?           @relation("BookedByAdmin", fields: [bookedByAdminId], references: [id])
-  trackingEvents  TrackingEvent[]
+  order         Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  bookedByAdmin User?           @relation("BookedByAdmin", fields: [bookedByAdminId], references: [id])
+  trackingEvents TrackingEvent[]
 }
 
 model TrackingEvent {
@@ -137,7 +223,7 @@ model TrackingEvent {
   source      TrackingSource @default(MANUAL)
   createdAt   DateTime       @default(now())
 
-  shipment    Shipment       @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
 }
 
 model Invoice {
@@ -155,15 +241,15 @@ model Invoice {
   createdAt   DateTime      @default(now())
   sentAt      DateTime?
 
-  user        User          @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 }
 
 model MISReport {
-  id         String   @id @default(uuid())
+  id         String    @id @default(uuid())
   reportDate DateTime
   pdfUrl     String?
   sentAt     DateTime?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
 }
 
 model AdminRole {
@@ -172,7 +258,18 @@ model AdminRole {
   permissions Json
   createdAt   DateTime @default(now())
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PartnerCredential {
+  id          String      @id @default(uuid())
+  partner     PartnerName @unique
+  loginId     String?
+  apiKey      String?
+  apiSecret   String?
+  baseUrl     String?
+  extraConfig Json?
+  updatedAt   DateTime    @updatedAt
 }
 
 model Counter {

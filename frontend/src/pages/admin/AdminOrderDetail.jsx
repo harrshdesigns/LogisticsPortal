@@ -28,9 +28,17 @@ export default function AdminOrderDetail() {
     materialHold: false,
     waitingPermit: false,
     deliveryCode: '',
+    // Consignor (admin editable — sent to partner)
+    consignorName: '', consignorPin: '', consignorAddressLine1: '', consignorAddressLine2: '',
+    consignorCity: '', consignorState: '', consignorContactPerson: '', consignorPhone: '', consignorEmail: '',
+    // Consignee (admin editable — sent to partner)
+    consigneeName: '', consigneePin: '', consigneeAddressLine1: '', consigneeAddressLine2: '',
+    consigneeCity: '', consigneeState: '', consigneeContactPerson: '', consigneePhone: '', consigneeEmail: '',
+    // Shipment
     serviceType: 'SURFACE',
     paymentType: 'PREPAID',
     codPayeeName: '',
+    codAmount: '',
     actualWeight: '',
     packages: '',
     packagesType: 'BAGS',
@@ -41,6 +49,13 @@ export default function AdminOrderDetail() {
     carrierRisk: false,
     ownersRisk: false,
     mallDelivery: false,
+    // Invoice / Commercial
+    invoiceValue: '',
+    invoiceNo: '',
+    invoiceDate: '',
+    ewayBillNo: '',
+    hsnCode: '',
+    quantity: '',
     notes: '',
   });
   const [ratesData, setRatesData] = useState(null);
@@ -65,9 +80,34 @@ export default function AdminOrderDetail() {
         setBooking(prev => ({
           ...prev,
           partnerName: o.shipment?.partnerName || 'DELHIVERY',
+          loginId: o.shipment?.loginId || '',
+          pickupOption: o.shipment?.pickupOption || 'PICKUP_FROM_CONSIGNOR',
+          deliveryCode: o.shipment?.deliveryCode || '',
+          // Pre-fill consignor from customer's order (admin can edit)
+          consignorName: o.consignorName || '',
+          consignorPin: o.consignorPin || '',
+          consignorAddressLine1: o.consignorAddressLine1 || '',
+          consignorAddressLine2: o.consignorAddressLine2 || '',
+          consignorCity: o.consignorCity || '',
+          consignorState: o.consignorState || '',
+          consignorContactPerson: o.consignorContactPerson || '',
+          consignorPhone: o.consignorPhone || '',
+          consignorEmail: o.consignorEmail || '',
+          // Pre-fill consignee from customer's order (admin can edit)
+          consigneeName: o.consigneeName || '',
+          consigneePin: o.consigneePin || '',
+          consigneeAddressLine1: o.consigneeAddressLine1 || '',
+          consigneeAddressLine2: o.consigneeAddressLine2 || '',
+          consigneeCity: o.consigneeCity || '',
+          consigneeState: o.consigneeState || '',
+          consigneeContactPerson: o.consigneeContactPerson || '',
+          consigneePhone: o.consigneePhone || '',
+          consigneeEmail: o.consigneeEmail || '',
+          // Shipment
           serviceType: o.serviceType || 'SURFACE',
           paymentType: o.paymentType || 'PREPAID',
           codPayeeName: o.codPayeeName || '',
+          codAmount: o.codAmount || '',
           actualWeight: o.actualWeight || '',
           packages: o.packages || '',
           packagesType: o.packagesType || 'BAGS',
@@ -81,10 +121,14 @@ export default function AdminOrderDetail() {
           carrierRisk: !!o.carrierRisk,
           ownersRisk: !!o.ownersRisk,
           mallDelivery: !!o.mallDelivery,
+          // Invoice / Commercial
+          invoiceValue: o.invoiceValue || '',
+          invoiceNo: o.invoiceNo || '',
+          invoiceDate: o.invoiceDate ? o.invoiceDate.split('T')[0] : '',
+          ewayBillNo: o.ewayBillNo || '',
+          hsnCode: o.hsnCode || '',
+          quantity: o.quantity || '',
           notes: o.notes || '',
-          pickupOption: o.shipment?.pickupOption || 'PICKUP_FROM_CONSIGNOR',
-          loginId: o.shipment?.loginId || '',
-          deliveryCode: o.shipment?.deliveryCode || '',
         }));
       })
       .catch(() => setError('Order not found'))
@@ -244,10 +288,17 @@ export default function AdminOrderDetail() {
               {[
                 ['Service', order.serviceType],
                 ['Payment', order.paymentType?.replace(/_/g, ' ')],
+                ['COD Amount', order.codAmount ? `₹${Number(order.codAmount).toLocaleString('en-IN')}` : null],
                 ['Weight', order.actualWeight ? `${order.actualWeight} kg` : null],
                 ['Packages', order.packages ? `${order.packages} ${order.packagesType || ''}` : null],
+                ['Quantity', order.quantity || null],
                 ['Dimensions', order.dimensionL ? `${order.dimensionL}×${order.dimensionW}×${order.dimensionH} ${order.dimensionUnit}` : null],
                 ['Item', order.itemDescription],
+                ['Invoice Value', order.invoiceValue ? `₹${Number(order.invoiceValue).toLocaleString('en-IN')}` : null],
+                ['Invoice No.', order.invoiceNo || null],
+                ['Invoice Date', order.invoiceDate ? new Date(order.invoiceDate).toLocaleDateString('en-IN') : null],
+                ['E-Way Bill', order.ewayBillNo || null],
+                ['HSN Code', order.hsnCode || null],
               ].filter(([,v]) => v).map(([k, v]) => (
                 <div key={k} className="flex justify-between">
                   <dt className="text-zinc-400">{k}</dt>
@@ -398,6 +449,102 @@ export default function AdminOrderDetail() {
 
             <hr className="border-zinc-100" />
 
+            {/* Consignor Details — admin editable, sent to partner */}
+            <div>
+              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">
+                Consignor Details
+                <span className="ml-2 normal-case text-blue-600 font-normal">(pre-filled from customer order — edit if needed)</span>
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Name / Company</label>
+                  <input type="text" name="consignorName" value={booking.consignorName} onChange={handleBookingChange} placeholder="Consignor name" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Contact Person</label>
+                  <input type="text" name="consignorContactPerson" value={booking.consignorContactPerson} onChange={handleBookingChange} placeholder="Authorized person" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Phone</label>
+                  <input type="text" name="consignorPhone" value={booking.consignorPhone} onChange={handleBookingChange} placeholder="Phone" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Email</label>
+                  <input type="email" name="consignorEmail" value={booking.consignorEmail} onChange={handleBookingChange} placeholder="Email" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">PIN Code</label>
+                  <input type="text" name="consignorPin" value={booking.consignorPin} onChange={handleBookingChange} placeholder="PIN" className="input text-sm" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Address Line 1</label>
+                  <input type="text" name="consignorAddressLine1" value={booking.consignorAddressLine1} onChange={handleBookingChange} placeholder="Street, building" className="input text-sm" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Address Line 2</label>
+                  <input type="text" name="consignorAddressLine2" value={booking.consignorAddressLine2} onChange={handleBookingChange} placeholder="Landmark (optional)" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">City</label>
+                  <input type="text" name="consignorCity" value={booking.consignorCity} onChange={handleBookingChange} placeholder="City" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">State</label>
+                  <input type="text" name="consignorState" value={booking.consignorState} onChange={handleBookingChange} placeholder="State" className="input text-sm" />
+                </div>
+              </div>
+            </div>
+
+            <hr className="border-zinc-100" />
+
+            {/* Consignee Details — admin editable, sent to partner */}
+            <div>
+              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">
+                Consignee Details
+                <span className="ml-2 normal-case text-blue-600 font-normal">(pre-filled from customer order — edit if needed)</span>
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Name / Company</label>
+                  <input type="text" name="consigneeName" value={booking.consigneeName} onChange={handleBookingChange} placeholder="Consignee name" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Contact Person</label>
+                  <input type="text" name="consigneeContactPerson" value={booking.consigneeContactPerson} onChange={handleBookingChange} placeholder="Authorized person" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Phone</label>
+                  <input type="text" name="consigneePhone" value={booking.consigneePhone} onChange={handleBookingChange} placeholder="Phone" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Email</label>
+                  <input type="email" name="consigneeEmail" value={booking.consigneeEmail} onChange={handleBookingChange} placeholder="Email" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">PIN Code</label>
+                  <input type="text" name="consigneePin" value={booking.consigneePin} onChange={handleBookingChange} placeholder="PIN" className="input text-sm" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Address Line 1</label>
+                  <input type="text" name="consigneeAddressLine1" value={booking.consigneeAddressLine1} onChange={handleBookingChange} placeholder="Street, building" className="input text-sm" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Address Line 2</label>
+                  <input type="text" name="consigneeAddressLine2" value={booking.consigneeAddressLine2} onChange={handleBookingChange} placeholder="Landmark (optional)" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">City</label>
+                  <input type="text" name="consigneeCity" value={booking.consigneeCity} onChange={handleBookingChange} placeholder="City" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">State</label>
+                  <input type="text" name="consigneeState" value={booking.consigneeState} onChange={handleBookingChange} placeholder="State" className="input text-sm" />
+                </div>
+              </div>
+            </div>
+
+            <hr className="border-zinc-100" />
+
             {/* Service & Payment */}
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -415,10 +562,17 @@ export default function AdminOrderDetail() {
             </div>
 
             {booking.paymentType === 'COD' && (
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">COD Payee Name</label>
-                <input type="text" name="codPayeeName" value={booking.codPayeeName} onChange={handleBookingChange}
-                  placeholder="Person to collect COD from" className="input text-sm" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">COD Payee Name</label>
+                  <input type="text" name="codPayeeName" value={booking.codPayeeName} onChange={handleBookingChange}
+                    placeholder="Person to collect COD from" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">COD Amount (₹)</label>
+                  <input type="number" name="codAmount" value={booking.codAmount} onChange={handleBookingChange}
+                    placeholder="0.00" step="0.01" min="0" className="input text-sm" />
+                </div>
               </div>
             )}
 
@@ -496,6 +650,42 @@ export default function AdminOrderDetail() {
                   {opt.label}
                 </label>
               ))}
+            </div>
+
+            {/* Invoice / Commercial Details */}
+            <div>
+              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Invoice &amp; Commercial Details</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Invoice Value (₹)</label>
+                  <input type="number" name="invoiceValue" value={booking.invoiceValue} onChange={handleBookingChange}
+                    placeholder="0.00" step="0.01" min="0" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Invoice No.</label>
+                  <input type="text" name="invoiceNo" value={booking.invoiceNo} onChange={handleBookingChange}
+                    placeholder="e.g. INV-2024-001" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Invoice Date</label>
+                  <input type="date" name="invoiceDate" value={booking.invoiceDate} onChange={handleBookingChange} className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">E-Way Bill No.</label>
+                  <input type="text" name="ewayBillNo" value={booking.ewayBillNo} onChange={handleBookingChange}
+                    placeholder="12-digit number" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">HSN Code</label>
+                  <input type="text" name="hsnCode" value={booking.hsnCode} onChange={handleBookingChange}
+                    placeholder="e.g. 6203" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Quantity</label>
+                  <input type="number" name="quantity" value={booking.quantity} onChange={handleBookingChange}
+                    placeholder="No. of items" min="1" className="input text-sm" />
+                </div>
+              </div>
             </div>
 
             {/* Notes */}

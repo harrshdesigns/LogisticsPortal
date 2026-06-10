@@ -74,14 +74,30 @@ export default function OrderDetail() {
             <InfoRow label="Service Type" value={order.serviceType} />
             <InfoRow label="Payment Type" value={order.paymentType?.replace(/_/g, ' ')} />
             {order.paymentType === 'COD' && <InfoRow label="COD Payee" value={order.codPayeeName} />}
+            {order.codAmount && <InfoRow label="COD Amount" value={`₹${Number(order.codAmount).toLocaleString('en-IN')}`} />}
             <InfoRow label="Actual Weight" value={order.actualWeight ? `${order.actualWeight} kg` : null} />
             <InfoRow label="Packages" value={order.packages ? `${order.packages} ${order.packagesType || ''}` : null} />
+            {order.quantity && <InfoRow label="Quantity" value={order.quantity} />}
             {order.unitWeight && <InfoRow label="Unit Weight" value={`${order.unitWeight} kg`} />}
             {(order.dimensionL || order.dimensionW || order.dimensionH) && (
               <InfoRow label="Dimensions" value={`${order.dimensionL || '?'} × ${order.dimensionW || '?'} × ${order.dimensionH || '?'} ${order.dimensionUnit || 'CMS'}`} />
             )}
             {order.itemDescription && <InfoRow label="Item Description" value={order.itemDescription} full />}
           </dl>
+
+          {/* Invoice / Commercial Details */}
+          {(order.invoiceValue || order.invoiceNo || order.ewayBillNo || order.hsnCode) && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <p className="text-xs font-semibold text-zinc-500 mb-3">Invoice &amp; Commercial Details</p>
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                {order.invoiceValue && <InfoRow label="Invoice Value" value={`₹${Number(order.invoiceValue).toLocaleString('en-IN')}`} />}
+                {order.invoiceNo && <InfoRow label="Invoice No." value={order.invoiceNo} />}
+                {order.invoiceDate && <InfoRow label="Invoice Date" value={new Date(order.invoiceDate).toLocaleDateString('en-IN')} />}
+                {order.ewayBillNo && <InfoRow label="E-Way Bill No." value={order.ewayBillNo} />}
+                {order.hsnCode && <InfoRow label="HSN Code" value={order.hsnCode} />}
+              </dl>
+            </div>
+          )}
 
           {/* Delivery Options */}
           {(order.appointmentDelivery || order.carrierRisk || order.ownersRisk || order.mallDelivery) && (
