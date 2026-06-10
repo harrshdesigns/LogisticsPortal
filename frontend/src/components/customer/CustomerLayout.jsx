@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext'
+import { useState } from 'react';
+import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: <HomeIcon />, end: true },
@@ -9,8 +9,8 @@ const NAV = [
   { to: '/addresses', label: 'Address Book', icon: <MapIcon /> },
 ]
 
-export default function CustomerLayout() {
-  const { user, logout } = useAuth()
+export default function CustomerLayout({ children }) {
+  const { user, logout } = useAuth();
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -87,7 +87,7 @@ export default function CustomerLayout() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <Outlet />
+          {children ?? <Outlet />}
         </main>
       </div>
     </div>

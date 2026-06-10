@@ -1,253 +1,377 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import api from '../../services/api'
-import LoadingSpinner from '../../components/shared/LoadingSpinner'
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import api from '../../services/api';
 
-const STEPS = ['Pickup Details', 'Delivery Details', 'Shipment Info']
+const STEPS = ['Consignor Details', 'Consignee Details', 'Shipment Details'];
 
-const emptyAddr = { contactName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '' }
-const STATES = ['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat','Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal','Delhi','Chandigarh','Jammu & Kashmir','Ladakh','Puducherry']
+const SERVICE_TYPES = ['SURFACE', 'AIR', 'WATER', 'EXPRESS'];
+const PAYMENT_TYPES = [
+  { value: 'PREPAID', label: 'Prepaid' },
+  { value: 'TO_PAY', label: 'To Pay' },
+  { value: 'TO_BILL', label: 'To Bill' },
+  { value: 'COD', label: 'COD (Cash on Delivery)' },
+];
+const PACKAGE_TYPES = ['PACKAGES', 'BOXES', 'BAGS'];
 
-function AddressForm({ value, onChange, savedAddresses }) {
-  const fillFromSaved = (addr) => {
-    onChange({
-      contactName: addr.contactName, phone: addr.phone,
-      addressLine1: addr.addressLine1, addressLine2: addr.addressLine2 || '',
-      city: addr.city, state: addr.state, pincode: addr.pincode,
-    })
-  }
-  const set = (k) => (e) => onChange({ ...value, [k]: e.target.value })
-
-  return (
-    <div className="space-y-4">
-      {savedAddresses?.length > 0 && (
-        <div>
-          <label className="label">Saved Addresses</label>
-          <div className="grid gap-2">
-            {savedAddresses.map(addr => (
-              <button key={addr.id} type="button" onClick={() => fillFromSaved(addr)}
-                className="text-left rounded-lg border border-zinc-200 px-4 py-3 text-sm hover:border-red-300 hover:bg-red-50 transition">
-                <span className="font-medium text-zinc-700">{addr.label}</span>
-                <span className="ml-2 text-zinc-500">{addr.contactName}, {addr.city}</span>
-              </button>
-            ))}
-          </div>
-          <div className="mt-3 flex items-center gap-3 text-xs text-zinc-400">
-            <div className="flex-1 h-px bg-zinc-200" />or fill manually<div className="flex-1 h-px bg-zinc-200" />
-          </div>
-        </div>
-      )}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="label">Contact Name *</label>
-          <input className="input" placeholder="Full name" value={value.contactName} onChange={set('contactName')} required />
-        </div>
-        <div>
-          <label className="label">Phone *</label>
-          <input className="input" placeholder="10-digit number" value={value.phone} onChange={set('phone')} required maxLength={10} pattern="[6-9][0-9]{9}" />
-        </div>
-        <div className="col-span-2">
-          <label className="label">Address Line 1 *</label>
-          <input className="input" placeholder="House/Flat no, Street name" value={value.addressLine1} onChange={set('addressLine1')} required />
-        </div>
-        <div className="col-span-2">
-          <label className="label">Address Line 2</label>
-          <input className="input" placeholder="Landmark, Area (optional)" value={value.addressLine2} onChange={set('addressLine2')} />
-        </div>
-        <div>
-          <label className="label">City *</label>
-          <input className="input" placeholder="Mumbai" value={value.city} onChange={set('city')} required />
-        </div>
-        <div>
-          <label className="label">Pincode *</label>
-          <input className="input" placeholder="6-digit pincode" value={value.pincode} onChange={set('pincode')} required maxLength={6} pattern="[1-9][0-9]{5}" />
-        </div>
-        <div className="col-span-2">
-          <label className="label">State *</label>
-          <select className="input" value={value.state} onChange={set('state')} required>
-            <option value="">Select state</option>
-            {STATES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-      </div>
-    </div>
-  )
-}
+const emptyAddress = {
+  name: '', pin: '', addressLine1: '', addressLine2: '',
+  city: '', state: '', contactPerson: '', phone: '', email: '',
+};
 
 export default function BookShipment() {
-  const navigate = useNavigate()
-  const [step, setStep] = useState(0)
-  const [pickup, setPickup] = useState(emptyAddr)
-  const [delivery, setDelivery] = useState(emptyAddr)
+  const navigate = useNavigate();
+  const [step, setStep] = useState(0);
+  const [addresses, setAddresses] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const [consignor, setConsignor] = useState({ ...emptyAddress });
+  const [consignee, setConsignee] = useState({ ...emptyAddress });
   const [shipment, setShipment] = useState({
-    commodity: '', weight: '', dimensions: { l: '', w: '', h: '' },
-    declaredValue: '', serviceType: 'SURFACE', paymentType: 'PREPAID', specialInstructions: '',
-  })
-  const [savedAddresses, setSavedAddresses] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState(null)
+    serviceType: 'SURFACE',
+    appointmentDelivery: false,
+    carrierRisk: false,
+    ownersRisk: false,
+    mallDelivery: false,
+    actualWeight: '',
+    itemDescription: '',
+    packages: '',
+    packagesType: 'BAGS',
+    unitWeight: '',
+    dimensionL: '', dimensionW: '', dimensionH: '',
+    dimensionUnit: 'CMS',
+    paymentType: 'PREPAID',
+    codPayeeName: '',
+    notes: '',
+  });
 
   useEffect(() => {
-    api.get('/addresses').then(({ data }) => setSavedAddresses(data.data.addresses)).catch(() => {})
-  }, [])
+    api.get('/addresses').then(r => setAddresses(r.data.data.addresses || [])).catch(() => {});
+  }, []);
 
-  const setShipField = (k) => (e) => setShipment(s => ({ ...s, [k]: e.target.value }))
-  const setDim = (k) => (e) => setShipment(s => ({ ...s, dimensions: { ...s.dimensions, [k]: e.target.value } }))
+  function fillFromAddress(target, addr) {
+    const setter = target === 'consignor' ? setConsignor : setConsignee;
+    setter({
+      name: addr.contactName || '',
+      pin: addr.pincode || '',
+      addressLine1: addr.addressLine1 || '',
+      addressLine2: addr.addressLine2 || '',
+      city: addr.city || '',
+      state: addr.state || '',
+      contactPerson: addr.contactName || '',
+      phone: addr.phone || '',
+      email: addr.email || '',
+    });
+  }
 
-  const handleSubmit = async () => {
-    setError(''); setLoading(true)
+  const handleConsignorChange = e => setConsignor(p => ({ ...p, [e.target.name]: e.target.value }));
+  const handleConsigneeChange = e => setConsignee(p => ({ ...p, [e.target.name]: e.target.value }));
+  const handleShipmentChange = e => {
+    const { name, value, type, checked } = e.target;
+    setShipment(p => ({ ...p, [name]: type === 'checkbox' ? checked : value }));
+  };
+
+  function validateStep() {
+    if (step === 0) {
+      if (!consignor.name || !consignor.city || !consignor.state || !consignor.pin || !consignor.phone)
+        return 'Please fill Consignor Name, PIN, City, State, and Phone.';
+    }
+    if (step === 1) {
+      if (!consignee.name || !consignee.city || !consignee.state || !consignee.pin || !consignee.phone)
+        return 'Please fill Consignee Name, PIN, City, State, and Phone.';
+    }
+    if (step === 2) {
+      if (!shipment.actualWeight) return 'Please enter actual weight.';
+      if (!shipment.packages) return 'Please enter number of packages.';
+      if (!shipment.itemDescription) return 'Please enter item description.';
+      if (shipment.paymentType === 'COD' && !shipment.codPayeeName) return 'Please enter COD Payee Name.';
+    }
+    return '';
+  }
+
+  function nextStep() {
+    const err = validateStep();
+    if (err) { setError(err); return; }
+    setError('');
+    setStep(s => s + 1);
+  }
+
+  async function handleSubmit() {
+    const err = validateStep();
+    if (err) { setError(err); return; }
+    setError('');
+    setLoading(true);
     try {
-      const { data } = await api.post('/orders', {
-        pickupAddress: pickup,
-        deliveryAddress: delivery,
-        commodity: shipment.commodity,
-        weight: parseFloat(shipment.weight),
-        dimensions: { l: parseFloat(shipment.dimensions.l || 0), w: parseFloat(shipment.dimensions.w || 0), h: parseFloat(shipment.dimensions.h || 0) },
-        declaredValue: parseFloat(shipment.declaredValue || 0),
-        serviceType: shipment.serviceType,
-        paymentType: shipment.paymentType,
-        specialInstructions: shipment.specialInstructions,
-      })
-      setSuccess(data.data.order)
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create order')
+      const payload = {
+        consignorName: consignor.name,
+        consignorPin: consignor.pin,
+        consignorAddressLine1: consignor.addressLine1,
+        consignorAddressLine2: consignor.addressLine2,
+        consignorCity: consignor.city,
+        consignorState: consignor.state,
+        consignorContactPerson: consignor.contactPerson,
+        consignorPhone: consignor.phone,
+        consignorEmail: consignor.email,
+        consigneeName: consignee.name,
+        consigneePin: consignee.pin,
+        consigneeAddressLine1: consignee.addressLine1,
+        consigneeAddressLine2: consignee.addressLine2,
+        consigneeCity: consignee.city,
+        consigneeState: consignee.state,
+        consigneeContactPerson: consignee.contactPerson,
+        consigneePhone: consignee.phone,
+        consigneeEmail: consignee.email,
+        ...shipment,
+      };
+      const res = await api.post('/orders', payload);
+      navigate(`/orders/${res.data.data.order.clientDocketNo}`);
+    } catch (e) {
+      setError(e.response?.data?.message || 'Failed to create order. Please try again.');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
-  if (success) {
-    return (
-      <div className="max-w-lg mx-auto mt-8">
-        <div className="card p-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-            <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-bold text-zinc-900">Order Booked!</h2>
-          <p className="mt-2 text-sm text-zinc-500">Your shipment has been booked successfully.</p>
-          <div className="mt-4 rounded-lg bg-zinc-50 p-4">
-            <p className="text-xs text-zinc-500">Docket Number</p>
-            <p className="mt-1 font-mono text-2xl font-bold text-red-600 tracking-widest">{success.clientDocketNo}</p>
-          </div>
-          <div className="mt-6 flex gap-3 justify-center">
-            <button onClick={() => navigate(`/orders/${success.clientDocketNo}`)} className="btn-primary">View Order</button>
-            <button onClick={() => { setSuccess(null); setStep(0); setPickup(emptyAddr); setDelivery(emptyAddr) }} className="btn-secondary">Book Another</button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="max-w-2xl">
-      <h1 className="text-xl font-bold text-zinc-900 mb-6">Book a Shipment</h1>
+    <div className="max-w-3xl mx-auto">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Book Shipment</h1>
 
-      {/* Progress */}
-      <div className="flex items-center mb-8">
-        {STEPS.map((s, i) => (
-          <div key={i} className="flex items-center flex-1">
-            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition
-              ${i < step ? 'bg-green-500 text-white' : i === step ? 'bg-red-600 text-white' : 'bg-zinc-100 text-zinc-400'}`}>
-              {i < step ? '✓' : i + 1}
+        {/* Stepper */}
+        <div className="flex items-center mb-8">
+          {STEPS.map((label, i) => (
+            <div key={i} className="flex items-center flex-1 last:flex-none">
+              <div className="flex flex-col items-center">
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-colors
+                  ${i < step ? 'bg-green-500 border-green-500 text-white'
+                    : i === step ? 'bg-blue-600 border-blue-600 text-white'
+                    : 'bg-white border-gray-300 text-gray-400'}`}>
+                  {i < step ? '✓' : i + 1}
+                </div>
+                <span className={`text-xs mt-1 text-center font-medium ${i === step ? 'text-blue-600' : 'text-gray-400'}`}>{label}</span>
+              </div>
+              {i < STEPS.length - 1 && (
+                <div className={`flex-1 h-0.5 mx-2 mb-4 ${i < step ? 'bg-green-400' : 'bg-gray-200'}`} />
+              )}
             </div>
-            <span className={`ml-2 text-sm font-medium hidden sm:block ${i === step ? 'text-zinc-900' : 'text-zinc-400'}`}>{s}</span>
-            {i < STEPS.length - 1 && <div className={`flex-1 h-0.5 mx-3 ${i < step ? 'bg-green-500' : 'bg-zinc-200'}`} />}
-          </div>
-        ))}
-      </div>
-
-      <div className="card p-6">
-        {step === 0 && (
-          <>
-            <h2 className="text-base font-semibold text-zinc-900 mb-4">Pickup Details</h2>
-            <AddressForm value={pickup} onChange={setPickup} savedAddresses={savedAddresses} />
-          </>
-        )}
-        {step === 1 && (
-          <>
-            <h2 className="text-base font-semibold text-zinc-900 mb-4">Delivery Details</h2>
-            <AddressForm value={delivery} onChange={setDelivery} savedAddresses={savedAddresses} />
-          </>
-        )}
-        {step === 2 && (
-          <>
-            <h2 className="text-base font-semibold text-zinc-900 mb-4">Shipment Details</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="label">Commodity Description *</label>
-                <input className="input" placeholder="e.g. Cotton fabric, electronic components" value={shipment.commodity} onChange={setShipField('commodity')} required />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Weight (kg) *</label>
-                  <input className="input" type="number" step="0.1" min="0.1" placeholder="5.0" value={shipment.weight} onChange={setShipField('weight')} required />
-                </div>
-                <div>
-                  <label className="label">Declared Value (₹)</label>
-                  <input className="input" type="number" placeholder="5000" value={shipment.declaredValue} onChange={setShipField('declaredValue')} />
-                </div>
-              </div>
-              <div>
-                <label className="label">Dimensions (cm) — L × W × H</label>
-                <div className="grid grid-cols-3 gap-3">
-                  <input className="input" type="number" placeholder="Length" value={shipment.dimensions.l} onChange={setDim('l')} />
-                  <input className="input" type="number" placeholder="Width" value={shipment.dimensions.w} onChange={setDim('w')} />
-                  <input className="input" type="number" placeholder="Height" value={shipment.dimensions.h} onChange={setDim('h')} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Service Type *</label>
-                  <select className="input" value={shipment.serviceType} onChange={setShipField('serviceType')}>
-                    <option value="SURFACE">Surface</option>
-                    <option value="AIR">Air</option>
-                    <option value="EXPRESS">Express</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Payment Type *</label>
-                  <select className="input" value={shipment.paymentType} onChange={setShipField('paymentType')}>
-                    <option value="PREPAID">Prepaid</option>
-                    <option value="COD">COD</option>
-                    <option value="TO_PAY">To Pay</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="label">Special Instructions</label>
-                <textarea className="input resize-none" rows={3} placeholder="Handle with care, fragile items, etc."
-                  value={shipment.specialInstructions} onChange={setShipField('specialInstructions')} />
-              </div>
-
-              {/* Summary */}
-              <div className="rounded-lg bg-zinc-50 border border-zinc-200 p-4 space-y-2 text-sm">
-                <p className="font-semibold text-zinc-700">Review Summary</p>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-zinc-600">
-                  <span className="text-zinc-400">From:</span><span>{pickup.city}, {pickup.state}</span>
-                  <span className="text-zinc-400">To:</span><span>{delivery.city}, {delivery.state}</span>
-                  <span className="text-zinc-400">Recipient:</span><span>{delivery.contactName}</span>
-                  <span className="text-zinc-400">Weight:</span><span>{shipment.weight} kg</span>
-                </div>
-              </div>
-
-              {error && <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>}
-            </div>
-          </>
-        )}
-
-        <div className="flex justify-between mt-6">
-          <button onClick={() => setStep(s => s - 1)} className="btn-secondary" disabled={step === 0}>← Previous</button>
-          {step < 2
-            ? <button onClick={() => setStep(s => s + 1)} className="btn-primary">Next →</button>
-            : <button onClick={handleSubmit} className="btn-primary" disabled={loading}>
-                {loading ? <><LoadingSpinner size="sm" />Booking…</> : 'Book Shipment'}
-              </button>
-          }
+          ))}
         </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>
+        )}
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+
+          {/* STEP 0: Consignor */}
+          {step === 0 && (
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800 mb-4">
+                Consignor Details <span className="text-sm font-normal text-gray-500">(Sender)</span>
+              </h2>
+              {addresses.length > 0 && (
+                <div className="mb-5">
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Fill from saved address</label>
+                  <select className="input-field" onChange={e => { if (e.target.value) fillFromAddress('consignor', addresses.find(a => a.id === e.target.value)); }}>
+                    <option value="">-- Select saved address --</option>
+                    {addresses.map(a => <option key={a.id} value={a.id}>{a.label} — {a.city}</option>)}
+                  </select>
+                </div>
+              )}
+              <AddressForm values={consignor} onChange={handleConsignorChange} />
+            </div>
+          )}
+
+          {/* STEP 1: Consignee */}
+          {step === 1 && (
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800 mb-4">
+                Consignee Details <span className="text-sm font-normal text-gray-500">(Receiver)</span>
+              </h2>
+              {addresses.length > 0 && (
+                <div className="mb-5">
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Fill from saved address</label>
+                  <select className="input-field" onChange={e => { if (e.target.value) fillFromAddress('consignee', addresses.find(a => a.id === e.target.value)); }}>
+                    <option value="">-- Select saved address --</option>
+                    {addresses.map(a => <option key={a.id} value={a.id}>{a.label} — {a.city}</option>)}
+                  </select>
+                </div>
+              )}
+              <AddressForm values={consignee} onChange={handleConsigneeChange} />
+            </div>
+          )}
+
+          {/* STEP 2: Shipment Details */}
+          {step === 2 && (
+            <div className="space-y-6">
+              <h2 className="text-lg font-semibold text-gray-800">Shipment Details</h2>
+
+              {/* Service Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Service Type <span className="text-red-500">*</span></label>
+                <div className="flex gap-3 flex-wrap">
+                  {SERVICE_TYPES.map(s => (
+                    <label key={s} className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 cursor-pointer transition-colors
+                      ${shipment.serviceType === s ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                      <input type="radio" name="serviceType" value={s} checked={shipment.serviceType === s} onChange={handleShipmentChange} className="sr-only" />
+                      {s}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Delivery Options */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Delivery Options</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { name: 'appointmentDelivery', label: 'Appointment Delivery' },
+                    { name: 'carrierRisk', label: 'Carrier Risk' },
+                    { name: 'ownersRisk', label: "Owner's Risk" },
+                    { name: 'mallDelivery', label: 'Mall Delivery' },
+                  ].map(opt => (
+                    <label key={opt.name} className="flex items-center gap-2 cursor-pointer select-none">
+                      <input type="checkbox" name={opt.name} checked={shipment[opt.name]} onChange={handleShipmentChange} className="w-4 h-4 text-blue-600 rounded border-gray-300" />
+                      <span className="text-sm text-gray-700">{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Weight & Packages */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Actual Weight (kg) <span className="text-red-500">*</span></label>
+                  <input type="number" name="actualWeight" value={shipment.actualWeight} onChange={handleShipmentChange} placeholder="0.00" step="0.01" min="0" className="input-field" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">No. of Packages <span className="text-red-500">*</span></label>
+                  <input type="number" name="packages" value={shipment.packages} onChange={handleShipmentChange} placeholder="1" min="1" className="input-field" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Package Type</label>
+                  <select name="packagesType" value={shipment.packagesType} onChange={handleShipmentChange} className="input-field">
+                    {PACKAGE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Unit Weight (kg)</label>
+                  <input type="number" name="unitWeight" value={shipment.unitWeight} onChange={handleShipmentChange} placeholder="0.00" step="0.01" min="0" className="input-field" />
+                </div>
+              </div>
+
+              {/* Dimensions */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">Dimensions (L × W × H)</label>
+                  <select name="dimensionUnit" value={shipment.dimensionUnit} onChange={handleShipmentChange} className="text-sm border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                    <option value="CMS">CMS</option>
+                    <option value="INCHES">INCHES</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <input type="number" name="dimensionL" value={shipment.dimensionL} onChange={handleShipmentChange} placeholder="Length" step="0.1" min="0" className="input-field" />
+                  <input type="number" name="dimensionW" value={shipment.dimensionW} onChange={handleShipmentChange} placeholder="Width" step="0.1" min="0" className="input-field" />
+                  <input type="number" name="dimensionH" value={shipment.dimensionH} onChange={handleShipmentChange} placeholder="Height" step="0.1" min="0" className="input-field" />
+                </div>
+              </div>
+
+              {/* Item Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Item Description <span className="text-red-500">*</span></label>
+                <textarea name="itemDescription" value={shipment.itemDescription} onChange={handleShipmentChange} rows={2} placeholder="Describe the contents..." className="input-field resize-none" />
+              </div>
+
+              {/* Payment Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Payment Type <span className="text-red-500">*</span></label>
+                <div className="grid grid-cols-2 gap-3">
+                  {PAYMENT_TYPES.map(pt => (
+                    <label key={pt.value} className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 cursor-pointer transition-colors
+                      ${shipment.paymentType === pt.value ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                      <input type="radio" name="paymentType" value={pt.value} checked={shipment.paymentType === pt.value} onChange={handleShipmentChange} className="sr-only" />
+                      {pt.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {shipment.paymentType === 'COD' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">COD Payee Name <span className="text-red-500">*</span></label>
+                  <input type="text" name="codPayeeName" value={shipment.codPayeeName} onChange={handleShipmentChange} placeholder="Name of person to collect payment from" className="input-field" />
+                </div>
+              )}
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Special Instructions / Notes</label>
+                <textarea name="notes" value={shipment.notes} onChange={handleShipmentChange} rows={2} placeholder="Any special handling or delivery instructions..." className="input-field resize-none" />
+              </div>
+            </div>
+          )}
+
+          {/* Navigation */}
+          <div className="flex justify-between mt-8 pt-4 border-t border-gray-100">
+            <button type="button" onClick={() => { setError(''); setStep(s => s - 1); }} disabled={step === 0}
+              className="px-5 py-2 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+              ← Previous
+            </button>
+            {step < STEPS.length - 1 ? (
+              <button type="button" onClick={nextStep}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                Next →
+              </button>
+            ) : (
+              <button type="button" onClick={handleSubmit} disabled={loading}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors">
+                {loading ? 'Submitting…' : 'Submit Order'}
+              </button>
+            )}
+          </div>
+        </div>
+    </div>
+  );
+}
+
+function AddressForm({ values, onChange }) {
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      <div className="col-span-2">
+        <label className="block text-sm font-medium text-gray-700 mb-1">Name / Company <span className="text-red-500">*</span></label>
+        <input type="text" name="name" value={values.name} onChange={onChange} placeholder="Full name or company name" className="input-field" />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person</label>
+        <input type="text" name="contactPerson" value={values.contactPerson} onChange={onChange} placeholder="Authorized person" className="input-field" />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Phone <span className="text-red-500">*</span></label>
+        <input type="tel" name="phone" value={values.phone} onChange={onChange} placeholder="10-digit mobile" className="input-field" />
+      </div>
+      <div className="col-span-2">
+        <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+        <input type="email" name="email" value={values.email} onChange={onChange} placeholder="email@example.com" className="input-field" />
+      </div>
+      <div className="col-span-2">
+        <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 1</label>
+        <input type="text" name="addressLine1" value={values.addressLine1} onChange={onChange} placeholder="Street, building, area" className="input-field" />
+      </div>
+      <div className="col-span-2">
+        <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 2</label>
+        <input type="text" name="addressLine2" value={values.addressLine2} onChange={onChange} placeholder="Landmark, locality (optional)" className="input-field" />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">City <span className="text-red-500">*</span></label>
+        <input type="text" name="city" value={values.city} onChange={onChange} placeholder="City" className="input-field" />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">State <span className="text-red-500">*</span></label>
+        <input type="text" name="state" value={values.state} onChange={onChange} placeholder="State" className="input-field" />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">PIN Code <span className="text-red-500">*</span></label>
+        <input type="text" name="pin" value={values.pin} onChange={onChange} placeholder="6-digit PIN" maxLength={6} className="input-field" />
       </div>
     </div>
-  )
+  );
 }

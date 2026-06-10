@@ -1,6 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
-const { generateInvoiceNo, success, failure } = require('../utils/helpers');
+const { generateDocketNo, generateInvoiceNo, success, failure } = require('../utils/helpers');
 const { getAdapter } = require('../services/deliveryPartners');
 const { generateInvoicePDF } = require('../services/pdf.service');
 const { generateMISReport } = require('../services/mis.service');
@@ -10,12 +10,12 @@ const fs = require('fs');
 
 const prisma = new PrismaClient();
 
-// Orders
+// ─── Orders ─────────────────────────────────────────────────────────────────
+
 async function listAllOrders(req, res) {
   try {
     const { page = 1, limit = 20, status, partner, customerId, dateFrom, dateTo, search } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
-
     const where = {};
     if (status) where.status = status;
     if (customerId) where.userId = customerId;
@@ -23,7 +23,7 @@ async function listAllOrders(req, res) {
     if (dateFrom || dateTo) {
       where.createdAt = {};
       if (dateFrom) where.createdAt.gte = new Date(dateFrom);
-      if (dateTo) { const d = new Date(dateTo); d.setHours(23, 59, 59, 999); where.createdAt.lte = d; }
+      if (dateTo) { const d = new Date(dateTo); d.setHours(23,59,59,999); where.createdAt.lte = d; }
     }
     if (partner) where.shipment = { partnerName: partner };
 
@@ -34,13 +34,10 @@ async function listAllOrders(req, res) {
           user: { select: { id: true, name: true, email: true, company: true } },
           shipment: { select: { partnerName: true, partnerDocketNo: true, bookedAt: true } },
         },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: parseInt(limit),
+        orderBy: { createdAt: 'desc' }, skip, take: parseInt(limit),
       }),
       prisma.order.count({ where }),
     ]);
-
     return success(res, { orders, total, page: parseInt(page), limit: parseInt(limit) });
   } catch (e) {
     return failure(res, 'Failed to fetch orders', 500, e.message);
@@ -68,53 +65,185 @@ async function getAdminOrder(req, res) {
   }
 }
 
-async function assignAndBook(req, res) {
+async function checkRates(req, res) {
   try {
-    const { partnerName, senderName, senderPhone, senderAddress, receiverName, receiverPhone, receiverAddress, weight, dimensions, declaredValue, serviceType, paymentType } = req.body;
+    const { partnerName } = req.body;
     const order = await prisma.order.findUnique({ where: { id: req.params.id } });
     if (!order) return failure(res, 'Order not found', 404);
 
-    const adapter = getAdapter(partnerName);
-    const result = await adapter.bookShipment({ ...order, senderName, senderPhone, receiverName, receiverPhone, weight, dimensions, declaredValue, serviceType, paymentType });
+    // Mock rates — replace with real API call per partner
+    await new Promise(r => setTimeout(r, 800));
+    const baseRate = (order.actualWeight || 1) * 45;
+    const rates = {
+      partner: partnerName,
+      checkedAt: new Date().toISOString(),
+      options: [
+        { service: 'Standard', estimatedDays: '5-7', rate: Math.round(baseRate), gst: Math.round(baseRate * 0.18), total: Math.round(baseRate * 1.18) },
+        { service: 'Express', estimatedDays: '2-3', rate: Math.round(baseRate * 1.6), gst: Math.round(baseRate * 1.6 * 0.18), total: Math.round(baseRate * 1.6 * 1.18) },
+        { service: 'Priority', estimatedDays: '1', rate: Math.round(baseRate * 2.4), gst: Math.round(baseRate * 2.4 * 0.18), total: Math.round(baseRate * 2.4 * 1.18) },
+      ],
+      note: 'Rates are indicative. Final rate confirmed at booking.',
+    };
+    return success(res, { rates }, 'Rates fetched successfully');
+  } catch (e) {
+    return failure(res, 'Failed to check rates', 500, e.message);
+  }
+}
 
+async function assignAndBook(req, res) {
+  try {
+    const {
+      partnerName,
+      // consignor override
+      consignorName, consignorPin, consignorAddressLine1, consignorAddressLine2,
+      consignorCity, consignorState, consignorContactPerson, consignorPhone, consignorEmail,
+      // consignee override
+      consigneeName, consigneePin, consigneeAddressLine1, consigneeAddressLine2,
+      consigneeCity, consigneeState, consigneeContactPerson, consigneePhone, consigneeEmail,
+      // shipment overrides
+      serviceType, actualWeight, packages, packagesType, unitWeight,
+      dimensionL, dimensionW, dimensionH, dimensionUnit,
+      appointmentDelivery, carrierRisk, ownersRisk, mallDelivery,
+      paymentType, codPayeeName,
+      // admin-only fields
+      loginId, docketDate, pickupOption, billToParty,
+      materialHold, waitingPermit, deliveryCode, notes,
+    } = req.body;
+
+    const order = await prisma.order.findUnique({ where: { id: req.params.id } });
+    if (!order) return failure(res, 'Order not found', 404);
+
+    // Get partner credential if loginId not provided
+    let resolvedLoginId = loginId;
+    if (!resolvedLoginId) {
+      const cred = await prisma.partnerCredential.findUnique({ where: { partner: partnerName } });
+      resolvedLoginId = cred?.loginId || '';
+    }
+
+    const adapter = getAdapter(partnerName);
+    const bookingData = {
+      ...order, partnerName,
+      consignorName: consignorName || order.consignorName,
+      consignorCity: consignorCity || order.consignorCity,
+      consigneeName: consigneeName || order.consigneeName,
+      consigneeCity: consigneeCity || order.consigneeCity,
+      actualWeight: actualWeight || order.actualWeight,
+      serviceType: serviceType || order.serviceType,
+    };
+    const result = await adapter.bookShipment(bookingData);
     if (!result.success) return failure(res, 'Booking failed with partner', 400, result.rawResponse);
 
     const shipment = await prisma.shipment.upsert({
       where: { orderId: order.id },
       update: {
-        partnerName,
-        partnerDocketNo: result.partnerDocketNo,
+        partnerName, partnerDocketNo: result.partnerDocketNo,
+        loginId: resolvedLoginId,
+        docketDate: docketDate ? new Date(docketDate) : new Date(),
+        pickupOption: pickupOption || null,
+        billToParty: billToParty || null,
+        materialHold: !!materialHold,
+        waitingPermit: !!waitingPermit,
+        deliveryCode: deliveryCode || null,
         bookingResponse: result.rawResponse,
         bookedAt: new Date(),
         bookedByAdminId: req.user.id,
       },
       create: {
-        orderId: order.id,
-        partnerName,
-        partnerDocketNo: result.partnerDocketNo,
+        orderId: order.id, partnerName, partnerDocketNo: result.partnerDocketNo,
+        loginId: resolvedLoginId,
+        docketDate: docketDate ? new Date(docketDate) : new Date(),
+        pickupOption: pickupOption || null,
+        billToParty: billToParty || null,
+        materialHold: !!materialHold,
+        waitingPermit: !!waitingPermit,
+        deliveryCode: deliveryCode || null,
         bookingResponse: result.rawResponse,
         bookedAt: new Date(),
         bookedByAdminId: req.user.id,
       },
     });
 
-    await prisma.order.update({ where: { id: order.id }, data: { status: 'BOOKED', updatedAt: new Date() } });
+    // Update order with any overrides from admin
+    await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        status: 'BOOKED',
+        ...(consignorName && { consignorName }),
+        ...(consignorCity && { consignorCity }),
+        ...(consignorState && { consignorState }),
+        ...(consignorContactPerson && { consignorContactPerson }),
+        ...(consignorPhone && { consignorPhone }),
+        ...(consigneeCity && { consigneeCity }),
+        ...(consigneeState && { consigneeState }),
+        ...(serviceType && { serviceType }),
+        ...(actualWeight && { actualWeight: parseFloat(actualWeight) }),
+        ...(paymentType && { paymentType }),
+        updatedAt: new Date(),
+      },
+    });
 
-    // Initial tracking event
     await prisma.trackingEvent.create({
       data: {
         shipmentId: shipment.id,
         status: 'BOOKED',
-        description: `Shipment booked with ${partnerName}. Partner docket: ${result.partnerDocketNo}`,
-        location: order.pickupAddressSnapshot?.city || 'Origin',
+        description: `Shipment booked with ${partnerName}`,
+        location: order.consignorCity || 'Origin',
         timestamp: new Date(),
         source: 'API',
       },
     });
 
-    return success(res, { shipment, partnerDocketNo: result.partnerDocketNo }, 'Shipment booked successfully');
+    return success(res, { shipment }, 'Shipment booked successfully');
   } catch (e) {
     return failure(res, 'Booking failed', 500, e.message);
+  }
+}
+
+// Direct booking by admin (no customer order)
+async function createDirectBooking(req, res) {
+  try {
+    const {
+      consignorName, consignorPin, consignorAddressLine1, consignorAddressLine2,
+      consignorCity, consignorState, consignorContactPerson, consignorPhone, consignorEmail,
+      consigneeName, consigneePin, consigneeAddressLine1, consigneeAddressLine2,
+      consigneeCity, consigneeState, consigneeContactPerson, consigneePhone, consigneeEmail,
+      serviceType, appointmentDelivery, carrierRisk, ownersRisk, mallDelivery,
+      actualWeight, itemDescription, packages, packagesType, unitWeight,
+      dimensionL, dimensionW, dimensionH, dimensionUnit,
+      paymentType, codPayeeName, notes,
+    } = req.body;
+
+    if (!consignorName || !consigneeName || !serviceType || !paymentType) {
+      return failure(res, 'Missing required fields', 400);
+    }
+
+    const clientDocketNo = await generateDocketNo();
+    const order = await prisma.order.create({
+      data: {
+        clientDocketNo, isDirectBooking: true,
+        consignorName, consignorPin, consignorAddressLine1, consignorAddressLine2,
+        consignorCity, consignorState, consignorContactPerson, consignorPhone, consignorEmail,
+        consigneeName, consigneePin, consigneeAddressLine1, consigneeAddressLine2,
+        consigneeCity, consigneeState, consigneeContactPerson, consigneePhone, consigneeEmail,
+        serviceType,
+        appointmentDelivery: !!appointmentDelivery, carrierRisk: !!carrierRisk,
+        ownersRisk: !!ownersRisk, mallDelivery: !!mallDelivery,
+        actualWeight: actualWeight ? parseFloat(actualWeight) : null,
+        itemDescription, packages: packages ? parseInt(packages) : null,
+        packagesType: packagesType || 'BAGS',
+        unitWeight: unitWeight ? parseFloat(unitWeight) : null,
+        dimensionL: dimensionL ? parseFloat(dimensionL) : null,
+        dimensionW: dimensionW ? parseFloat(dimensionW) : null,
+        dimensionH: dimensionH ? parseFloat(dimensionH) : null,
+        dimensionUnit: dimensionUnit || 'CMS',
+        paymentType, codPayeeName: paymentType === 'COD' ? codPayeeName : null,
+        notes, status: 'PENDING',
+      },
+    });
+
+    return success(res, { order }, 'Direct booking created', 201);
+  } catch (e) {
+    return failure(res, 'Failed to create direct booking', 500, e.message);
   }
 }
 
@@ -126,10 +255,7 @@ async function addTrackingEvent(req, res) {
 
     const event = await prisma.trackingEvent.create({
       data: {
-        shipmentId: order.shipment.id,
-        status,
-        description,
-        location,
+        shipmentId: order.shipment.id, status, description, location,
         timestamp: timestamp ? new Date(timestamp) : new Date(),
         source: 'MANUAL',
       },
@@ -144,8 +270,6 @@ async function updateOrderStatus(req, res) {
   try {
     const { status } = req.body;
     const order = await prisma.order.update({ where: { id: req.params.id }, data: { status, updatedAt: new Date() } });
-
-    // Send status update email
     try {
       const fullOrder = await prisma.order.findUnique({
         where: { id: order.id },
@@ -158,22 +282,45 @@ async function updateOrderStatus(req, res) {
           html: statusUpdateTemplate(fullOrder, fullOrder.shipment?.trackingEvents?.[0]),
         });
       }
-    } catch (e) {
-      console.error('Status email failed:', e.message);
-    }
-
+    } catch (e) { console.error('Status email failed:', e.message); }
     return success(res, { order }, 'Status updated');
   } catch (e) {
     return failure(res, 'Failed to update status', 500, e.message);
   }
 }
 
-// Customers
+// ─── Partner Credentials ─────────────────────────────────────────────────────
+
+async function getPartnerCredentials(req, res) {
+  try {
+    const creds = await prisma.partnerCredential.findMany();
+    return success(res, { credentials: creds });
+  } catch (e) {
+    return failure(res, 'Failed to fetch credentials', 500, e.message);
+  }
+}
+
+async function upsertPartnerCredential(req, res) {
+  try {
+    const { partner } = req.params;
+    const { loginId, apiKey, apiSecret, baseUrl, extraConfig } = req.body;
+    const cred = await prisma.partnerCredential.upsert({
+      where: { partner },
+      update: { loginId, apiKey, apiSecret, baseUrl, extraConfig },
+      create: { partner, loginId, apiKey, apiSecret, baseUrl, extraConfig },
+    });
+    return success(res, { credential: cred }, 'Credentials saved');
+  } catch (e) {
+    return failure(res, 'Failed to save credentials', 500, e.message);
+  }
+}
+
+// ─── Customers ───────────────────────────────────────────────────────────────
+
 async function listCustomers(req, res) {
   try {
     const { page = 1, limit = 20 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
-
     const [customers, total] = await Promise.all([
       prisma.user.findMany({
         where: { role: 'CUSTOMER' },
@@ -182,9 +329,7 @@ async function listCustomers(req, res) {
           _count: { select: { orders: true } },
           orders: { select: { createdAt: true }, orderBy: { createdAt: 'desc' }, take: 1 },
         },
-        skip,
-        take: parseInt(limit),
-        orderBy: { createdAt: 'desc' },
+        skip, take: parseInt(limit), orderBy: { createdAt: 'desc' },
       }),
       prisma.user.count({ where: { role: 'CUSTOMER' } }),
     ]);
@@ -194,17 +339,16 @@ async function listCustomers(req, res) {
   }
 }
 
-// Invoices
+// ─── Invoices ────────────────────────────────────────────────────────────────
+
 async function createInvoice(req, res) {
   try {
     const { userId, dateFrom, dateTo, lineItems, applyGST } = req.body;
     if (!userId || !dateFrom || !dateTo || !lineItems?.length) return failure(res, 'Missing required fields', 400);
-
     const subtotal = lineItems.reduce((s, i) => s + parseFloat(i.amount || 0), 0);
     const tax = applyGST ? parseFloat((subtotal * 0.18).toFixed(2)) : 0;
     const totalAmount = parseFloat((subtotal + tax).toFixed(2));
     const invoiceNo = await generateInvoiceNo();
-
     const invoice = await prisma.invoice.create({
       data: { invoiceNo, userId, dateFrom: new Date(dateFrom), dateTo: new Date(dateTo), lineItems, subtotal, tax, totalAmount, status: 'DRAFT' },
     });
@@ -230,30 +374,18 @@ async function sendInvoice(req, res) {
   try {
     const invoice = await prisma.invoice.findUnique({ where: { id: req.params.id }, include: { user: true } });
     if (!invoice) return failure(res, 'Invoice not found', 404);
-
     const pdfUrl = await generateInvoicePDF(invoice, invoice.user);
-
     await prisma.invoice.update({ where: { id: invoice.id }, data: { pdfUrl, status: 'SENT', sentAt: new Date() } });
-
-    const attachments = [{
-      filename: `${invoice.invoiceNo}.pdf`,
-      path: path.join(__dirname, '../../', pdfUrl),
-    }];
-
-    await sendMail({
-      to: invoice.user.email,
-      subject: `Invoice ${invoice.invoiceNo} from ShipEase`,
-      html: invoiceTemplate(invoice, invoice.user),
-      attachments,
-    });
-
+    const attachments = [{ filename: `${invoice.invoiceNo}.pdf`, path: path.join(__dirname, '../../', pdfUrl) }];
+    await sendMail({ to: invoice.user.email, subject: `Invoice ${invoice.invoiceNo} from ShipEase`, html: invoiceTemplate(invoice, invoice.user), attachments });
     return success(res, { pdfUrl }, 'Invoice sent successfully');
   } catch (e) {
     return failure(res, 'Failed to send invoice', 500, e.message);
   }
 }
 
-// MIS
+// ─── MIS ─────────────────────────────────────────────────────────────────────
+
 async function listMISReports(req, res) {
   try {
     const reports = await prisma.mISReport.findMany({ orderBy: { createdAt: 'desc' } });
@@ -288,13 +420,13 @@ async function downloadMIS(req, res) {
   }
 }
 
-// Admin users
+// ─── Admin Users ─────────────────────────────────────────────────────────────
+
 async function listAdmins(req, res) {
   try {
     const admins = await prisma.user.findMany({
       where: { role: { in: ['ADMIN', 'SUPER_ADMIN'] } },
-      include: { adminRole: true },
-      orderBy: { createdAt: 'asc' },
+      include: { adminRole: true }, orderBy: { createdAt: 'asc' },
     });
     return success(res, { admins: admins.map(({ password: _, ...a }) => a) });
   } catch (e) {
@@ -306,14 +438,11 @@ async function createAdmin(req, res) {
   try {
     const { name, email, password, permissions } = req.body;
     if (!name || !email || !password) return failure(res, 'Name, email, password required', 400);
-
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return failure(res, 'Email already exists', 409);
-
     const hashed = await bcrypt.hash(password, 12);
     const user = await prisma.user.create({ data: { name, email, password: hashed, role: 'ADMIN', company: 'ShipEase' } });
     const role = await prisma.adminRole.create({ data: { userId: user.id, permissions: permissions || [] } });
-
     const { password: _, ...userOut } = user;
     return success(res, { user: { ...userOut, adminRole: role } }, 'Admin created', 201);
   } catch (e) {
@@ -324,9 +453,6 @@ async function createAdmin(req, res) {
 async function updateAdmin(req, res) {
   try {
     const { permissions, isActive } = req.body;
-    const updates = {};
-    if (isActive !== undefined) updates.isActive = isActive;
-
     if (permissions !== undefined) {
       await prisma.adminRole.upsert({
         where: { userId: req.params.id },
@@ -334,22 +460,19 @@ async function updateAdmin(req, res) {
         create: { userId: req.params.id, permissions },
       });
     }
-    if (Object.keys(updates).length) {
-      await prisma.user.update({ where: { id: req.params.id }, data: updates });
-    }
-
+    if (isActive !== undefined) await prisma.user.update({ where: { id: req.params.id }, data: { isActive } });
     return success(res, {}, 'Admin updated');
   } catch (e) {
     return failure(res, 'Failed to update admin', 500, e.message);
   }
 }
 
-// Dashboard stats
+// ─── Dashboard ───────────────────────────────────────────────────────────────
+
 async function getDashboardStats(req, res) {
   try {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const today = new Date(); today.setHours(0,0,0,0);
     const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
 
     const [totalToday, pending, inTransit, deliveredToday, totalCustomers, ordersByPartner] = await Promise.all([
       prisma.order.count({ where: { createdAt: { gte: today, lt: tomorrow } } }),
@@ -361,8 +484,7 @@ async function getDashboardStats(req, res) {
     ]);
 
     const recentOrders = await prisma.order.findMany({
-      take: 10,
-      orderBy: { createdAt: 'desc' },
+      take: 10, orderBy: { createdAt: 'desc' },
       include: {
         user: { select: { name: true, company: true } },
         shipment: { select: { partnerName: true } },
@@ -380,8 +502,11 @@ async function getDashboardStats(req, res) {
 }
 
 module.exports = {
-  listAllOrders, getAdminOrder, assignAndBook, addTrackingEvent, updateOrderStatus,
-  listCustomers, createInvoice, listAdminInvoices, sendInvoice,
+  listAllOrders, getAdminOrder, checkRates, assignAndBook, createDirectBooking,
+  addTrackingEvent, updateOrderStatus,
+  getPartnerCredentials, upsertPartnerCredential,
+  listCustomers,
+  createInvoice, listAdminInvoices, sendInvoice,
   listMISReports, generateMIS, downloadMIS,
   listAdmins, createAdmin, updateAdmin, getDashboardStats,
 };
