@@ -86,15 +86,17 @@ export default function OrderDetail() {
           </dl>
 
           {/* Invoice / Commercial Details */}
-          {(order.invoiceValue || order.invoiceNo || order.ewayBillNo || order.hsnCode) && (
+          {(order.invoiceValue || order.ewayBillNo || order.hsnCode || order.invoiceDate || order.invoiceNo || order.codAmount || order.quantity) && (
             <div className="mt-4 pt-4 border-t border-gray-100">
               <p className="text-xs font-semibold text-zinc-500 mb-3">Invoice &amp; Commercial Details</p>
               <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
                 {order.invoiceValue && <InfoRow label="Invoice Value" value={`₹${Number(order.invoiceValue).toLocaleString('en-IN')}`} />}
-                {order.invoiceNo && <InfoRow label="Invoice No." value={order.invoiceNo} />}
-                {order.invoiceDate && <InfoRow label="Invoice Date" value={new Date(order.invoiceDate).toLocaleDateString('en-IN')} />}
                 {order.ewayBillNo && <InfoRow label="E-Way Bill No." value={order.ewayBillNo} />}
                 {order.hsnCode && <InfoRow label="HSN Code" value={order.hsnCode} />}
+                {order.invoiceDate && <InfoRow label="Invoice Date" value={new Date(order.invoiceDate).toLocaleDateString('en-IN')} />}
+                {order.invoiceNo && <InfoRow label="Invoice No." value={order.invoiceNo} />}
+                {order.codAmount && <InfoRow label="COD Amount" value={`₹${Number(order.codAmount).toLocaleString('en-IN')}`} />}
+                {order.quantity && <InfoRow label="Quantity" value={order.quantity} />}
               </dl>
             </div>
           )}

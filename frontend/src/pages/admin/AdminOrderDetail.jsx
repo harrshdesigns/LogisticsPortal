@@ -562,17 +562,10 @@ export default function AdminOrderDetail() {
             </div>
 
             {booking.paymentType === 'COD' && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">COD Payee Name</label>
-                  <input type="text" name="codPayeeName" value={booking.codPayeeName} onChange={handleBookingChange}
-                    placeholder="Person to collect COD from" className="input text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">COD Amount (₹)</label>
-                  <input type="number" name="codAmount" value={booking.codAmount} onChange={handleBookingChange}
-                    placeholder="0.00" step="0.01" min="0" className="input text-sm" />
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-600 mb-1">COD Payee Name</label>
+                <input type="text" name="codPayeeName" value={booking.codPayeeName} onChange={handleBookingChange}
+                  placeholder="Person to collect COD from" className="input text-sm" />
               </div>
             )}
 
@@ -652,34 +645,46 @@ export default function AdminOrderDetail() {
               ))}
             </div>
 
-            {/* Invoice / Commercial Details */}
+            {/* Invoice / Commercial Details — exact order */}
             <div>
               <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Invoice &amp; Commercial Details</p>
               <div className="grid grid-cols-2 gap-3">
+                {/* 1. Invoice Value */}
                 <div>
                   <label className="block text-xs font-medium text-zinc-600 mb-1">Invoice Value (₹)</label>
                   <input type="number" name="invoiceValue" value={booking.invoiceValue} onChange={handleBookingChange}
                     placeholder="0.00" step="0.01" min="0" className="input text-sm" />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">Invoice No.</label>
-                  <input type="text" name="invoiceNo" value={booking.invoiceNo} onChange={handleBookingChange}
-                    placeholder="e.g. INV-2024-001" className="input text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">Invoice Date</label>
-                  <input type="date" name="invoiceDate" value={booking.invoiceDate} onChange={handleBookingChange} className="input text-sm" />
-                </div>
+                {/* 2. Eway Bill No. */}
                 <div>
                   <label className="block text-xs font-medium text-zinc-600 mb-1">E-Way Bill No.</label>
                   <input type="text" name="ewayBillNo" value={booking.ewayBillNo} onChange={handleBookingChange}
                     placeholder="12-digit number" className="input text-sm" />
                 </div>
+                {/* 3. HSN Code */}
                 <div>
                   <label className="block text-xs font-medium text-zinc-600 mb-1">HSN Code</label>
                   <input type="text" name="hsnCode" value={booking.hsnCode} onChange={handleBookingChange}
                     placeholder="e.g. 6203" className="input text-sm" />
                 </div>
+                {/* 4. Invoice Date */}
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Invoice Date</label>
+                  <input type="date" name="invoiceDate" value={booking.invoiceDate} onChange={handleBookingChange} className="input text-sm" />
+                </div>
+                {/* 5. Invoice No. */}
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Invoice No.</label>
+                  <input type="text" name="invoiceNo" value={booking.invoiceNo} onChange={handleBookingChange}
+                    placeholder="e.g. INV-2024-001" className="input text-sm" />
+                </div>
+                {/* 6. COD Amount */}
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">COD Amount (₹)</label>
+                  <input type="number" name="codAmount" value={booking.codAmount} onChange={handleBookingChange}
+                    placeholder="0.00" step="0.01" min="0" className="input text-sm" />
+                </div>
+                {/* 7. Quantity */}
                 <div>
                   <label className="block text-xs font-medium text-zinc-600 mb-1">Quantity</label>
                   <input type="number" name="quantity" value={booking.quantity} onChange={handleBookingChange}

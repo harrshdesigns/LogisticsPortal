@@ -303,42 +303,47 @@ export default function BookShipment() {
               </div>
 
               {shipment.paymentType === 'COD' && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">COD Payee Name <span className="text-red-500">*</span></label>
-                    <input type="text" name="codPayeeName" value={shipment.codPayeeName} onChange={handleShipmentChange} placeholder="Person to collect payment from" className="input-field" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">COD Amount (₹)</label>
-                    <input type="number" name="codAmount" value={shipment.codAmount} onChange={handleShipmentChange} placeholder="0.00" step="0.01" min="0" className="input-field" />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">COD Payee Name <span className="text-red-500">*</span></label>
+                  <input type="text" name="codPayeeName" value={shipment.codPayeeName} onChange={handleShipmentChange} placeholder="Person to collect payment from" className="input-field" />
                 </div>
               )}
 
-              {/* Invoice / Commercial Details */}
+              {/* Invoice / Commercial Details — exact order as specified */}
               <div>
                 <p className="text-sm font-semibold text-gray-700 mb-3 pb-1 border-b border-gray-100">Invoice &amp; Commercial Details</p>
                 <div className="grid grid-cols-2 gap-4">
+                  {/* 1. Invoice Value */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Value (₹)</label>
                     <input type="number" name="invoiceValue" value={shipment.invoiceValue} onChange={handleShipmentChange} placeholder="0.00" step="0.01" min="0" className="input-field" />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Invoice No.</label>
-                    <input type="text" name="invoiceNo" value={shipment.invoiceNo} onChange={handleShipmentChange} placeholder="e.g. INV-2024-001" className="input-field" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Date</label>
-                    <input type="date" name="invoiceDate" value={shipment.invoiceDate} onChange={handleShipmentChange} className="input-field" />
-                  </div>
+                  {/* 2. Eway Bill No. */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">E-Way Bill No.</label>
                     <input type="text" name="ewayBillNo" value={shipment.ewayBillNo} onChange={handleShipmentChange} placeholder="12-digit e-way bill number" className="input-field" />
                   </div>
+                  {/* 3. HSN Code */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">HSN Code</label>
                     <input type="text" name="hsnCode" value={shipment.hsnCode} onChange={handleShipmentChange} placeholder="e.g. 6203" className="input-field" />
                   </div>
+                  {/* 4. Invoice Date */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Date</label>
+                    <input type="date" name="invoiceDate" value={shipment.invoiceDate} onChange={handleShipmentChange} className="input-field" />
+                  </div>
+                  {/* 5. Invoice No. */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Invoice No.</label>
+                    <input type="text" name="invoiceNo" value={shipment.invoiceNo} onChange={handleShipmentChange} placeholder="e.g. INV-2024-001" className="input-field" />
+                  </div>
+                  {/* 6. COD Amount */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">COD Amount (₹)</label>
+                    <input type="number" name="codAmount" value={shipment.codAmount} onChange={handleShipmentChange} placeholder="0.00" step="0.01" min="0" className="input-field" />
+                  </div>
+                  {/* 7. Quantity */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
                     <input type="number" name="quantity" value={shipment.quantity} onChange={handleShipmentChange} placeholder="No. of items" min="1" className="input-field" />
