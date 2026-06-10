@@ -68,7 +68,7 @@ export default function Orders() {
                 <thead>
                   <tr className="border-b border-zinc-100 bg-zinc-50">
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Docket No</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Commodity</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Item Description</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Weight</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Service</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Status</th>
@@ -83,8 +83,8 @@ export default function Orders() {
                           {order.clientDocketNo}
                         </Link>
                       </td>
-                      <td className="px-6 py-4 text-zinc-700 max-w-[160px] truncate">{order.commodity}</td>
-                      <td className="px-6 py-4 text-zinc-600">{order.weight} kg</td>
+                      <td className="px-6 py-4 text-zinc-700 max-w-[160px] truncate">{order.itemDescription || '—'}</td>
+                      <td className="px-6 py-4 text-zinc-600">{order.actualWeight ? `${order.actualWeight} kg` : '—'}</td>
                       <td className="px-6 py-4 text-zinc-600">{order.serviceType}</td>
                       <td className="px-6 py-4"><StatusBadge status={order.status} /></td>
                       <td className="px-6 py-4 text-zinc-500">{new Date(order.createdAt).toLocaleDateString('en-IN')}</td>

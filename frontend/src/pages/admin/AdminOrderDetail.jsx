@@ -288,17 +288,18 @@ export default function AdminOrderDetail() {
               {[
                 ['Service', order.serviceType],
                 ['Payment', order.paymentType?.replace(/_/g, ' ')],
-                ['COD Amount', order.codAmount ? `₹${Number(order.codAmount).toLocaleString('en-IN')}` : null],
                 ['Weight', order.actualWeight ? `${order.actualWeight} kg` : null],
                 ['Packages', order.packages ? `${order.packages} ${order.packagesType || ''}` : null],
-                ['Quantity', order.quantity || null],
                 ['Dimensions', order.dimensionL ? `${order.dimensionL}×${order.dimensionW}×${order.dimensionH} ${order.dimensionUnit}` : null],
                 ['Item', order.itemDescription],
+                // 7 new fields in exact specified order:
                 ['Invoice Value', order.invoiceValue ? `₹${Number(order.invoiceValue).toLocaleString('en-IN')}` : null],
-                ['Invoice No.', order.invoiceNo || null],
-                ['Invoice Date', order.invoiceDate ? new Date(order.invoiceDate).toLocaleDateString('en-IN') : null],
-                ['E-Way Bill', order.ewayBillNo || null],
+                ['E-Way Bill No.', order.ewayBillNo || null],
                 ['HSN Code', order.hsnCode || null],
+                ['Invoice Date', order.invoiceDate ? new Date(order.invoiceDate).toLocaleDateString('en-IN') : null],
+                ['Invoice No.', order.invoiceNo || null],
+                ['COD Amount', order.codAmount ? `₹${Number(order.codAmount).toLocaleString('en-IN')}` : null],
+                ['Quantity', order.quantity || null],
               ].filter(([,v]) => v).map(([k, v]) => (
                 <div key={k} className="flex justify-between">
                   <dt className="text-zinc-400">{k}</dt>
