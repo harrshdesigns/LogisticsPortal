@@ -1,54 +1,67 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import api from '../../services/api';
 
-const STEPS = ['Consignor Details', 'Consignee Details', 'Shipment Details'];
-
-const SERVICE_TYPES = ['SURFACE', 'AIR', 'WATER', 'EXPRESS'];
-const PAYMENT_TYPES = [
-  { value: 'PREPAID', label: 'Prepaid' },
-  { value: 'TO_PAY', label: 'To Pay' },
-  { value: 'TO_BILL', label: 'To Bill' },
-  { value: 'COD', label: 'COD (Cash on Delivery)' },
+const INDIAN_STATES = [
+  'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat',
+  'Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh',
+  'Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab',
+  'Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh',
+  'Uttarakhand','West Bengal','Andaman and Nicobar Islands','Chandigarh',
+  'Dadra and Nagar Haveli and Daman and Diu','Delhi','Jammu and Kashmir',
+  'Ladakh','Lakshadweep','Puducherry',
 ];
-const PACKAGE_TYPES = ['PACKAGES', 'BOXES', 'BAGS'];
 
-const emptyAddress = {
-  name: '', pin: '', addressLine1: '', addressLine2: '',
-  city: '', state: '', contactPerson: '', phone: '', email: '',
+const COUNTRY_CODES = [
+  { code: '+91', label: '+91' }, { code: '+1', label: '+1' },
+  { code: '+44', label: '+44' }, { code: '+61', label: '+61' },
+  { code: '+971', label: '+971' }, { code: '+65', label: '+65' },
+  { code: '+60', label: '+60' }, { code: '+66', label: '+66' },
+  { code: '+49', label: '+49' }, { code: '+33', label: '+33' },
+];
+
+const emptyParty = {
+  id: '', name: '', pin: '', addressLine1: '', addressLine2: '',
+  city: '', state: '', contactPerson: '', countryCode: '+91', phone: '', email: '',
+};
+
+const emptyRow = {
+  description: '', reference: '',
+  packages: '', packagesType: 'BAGS',
+  unitWeight: '', dimensionL: '', dimensionW: '', dimensionH: '', dimensionUnit: 'CMS',
 };
 
 export default function BookShipment() {
   const navigate = useNavigate();
-  const [step, setStep] = useState(0);
-  const [addresses, setAddresses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [addresses, setAddresses] = useState([]);
 
-  const [consignor, setConsignor] = useState({ ...emptyAddress });
-  const [consignee, setConsignee] = useState({ ...emptyAddress });
-  const [shipment, setShipment] = useState({
+  const [consignor, setConsignor] = useState({ ...emptyParty });
+  const [consignee, setConsignee] = useState({ ...emptyParty });
+  const [packageRows, setPackageRows] = useState([{ ...emptyRow }]);
+
+  const [form, setForm] = useState({
+    // Invoice box
+    invoiceValue: '', ewayBillNo: '', hsnCode: '',
+    invoiceDate: '', invoiceNo: '', codAmount: '', quantity: '',
+    // Service
     serviceType: 'SURFACE',
-    appointmentDelivery: false,
-    carrierRisk: false,
-    ownersRisk: false,
-    mallDelivery: false,
-    actualWeight: '',
-    itemDescription: '',
-    packages: '',
-    packagesType: 'BAGS',
-    unitWeight: '',
-    dimensionL: '', dimensionW: '', dimensionH: '',
-    dimensionUnit: 'CMS',
+    appointmentDelivery: false, carrierRisk: false,
+    mallDelivery: false, ownersRisk: false,
+    // Payment
     paymentType: 'PREPAID',
+    billToParty: '',
+    // Docket
+    docketDate: new Date().toISOString().split('T')[0],
+    docketTime: '12:00',
+    docketAmPm: 'PM',
+    // Checkboxes
+    materialHold: false,
+    waitingPermit: false,
+    // COD
     codPayeeName: '',
-    codAmount: '',
-    invoiceValue: '',
-    invoiceNo: '',
-    invoiceDate: '',
-    ewayBillNo: '',
-    hsnCode: '',
-    quantity: '',
+    // Notes
     notes: '',
   });
 
@@ -56,60 +69,72 @@ export default function BookShipment() {
     api.get('/addresses').then(r => setAddresses(r.data.data.addresses || [])).catch(() => {});
   }, []);
 
-  function fillFromAddress(target, addr) {
-    const setter = target === 'consignor' ? setConsignor : setConsignee;
+  const setF = (name, value) => setForm(prev => ({ ...prev, [name]: value }));
+  const handleFormChange = e => {
+    const { name, value, type, checked } = e.target;
+    setF(name, type === 'checkbox' ? checked : value);
+  };
+
+  const handleServiceOption = e => {
+    const { name, checked } = e.target;
+    if (name === 'carrierRisk' && checked) {
+      setForm(prev => ({ ...prev, carrierRisk: true, ownersRisk: false }));
+    } else if (name === 'ownersRisk' && checked) {
+      setForm(prev => ({ ...prev, ownersRisk: true, carrierRisk: false }));
+    } else {
+      setF(name, checked);
+    }
+  };
+
+  const handleParty = (setter) => (e) => {
+    const { name, value } = e.target;
+    setter(prev => ({ ...prev, [name]: value }));
+  };
+
+  const fillParty = (setter, addr) => {
     setter({
-      name: addr.contactName || '',
+      id: addr.id,
+      name: addr.companyName || addr.contactName || '',
       pin: addr.pincode || '',
       addressLine1: addr.addressLine1 || '',
       addressLine2: addr.addressLine2 || '',
       city: addr.city || '',
       state: addr.state || '',
       contactPerson: addr.contactName || '',
+      countryCode: addr.countryCode || '+91',
       phone: addr.phone || '',
       email: addr.email || '',
     });
-  }
-
-  const handleConsignorChange = e => setConsignor(p => ({ ...p, [e.target.name]: e.target.value }));
-  const handleConsigneeChange = e => setConsignee(p => ({ ...p, [e.target.name]: e.target.value }));
-  const handleShipmentChange = e => {
-    const { name, value, type, checked } = e.target;
-    setShipment(p => ({ ...p, [name]: type === 'checkbox' ? checked : value }));
   };
 
-  function validateStep() {
-    if (step === 0) {
-      if (!consignor.name || !consignor.city || !consignor.state || !consignor.pin || !consignor.phone)
-        return 'Please fill Consignor Name, PIN, City, State, and Phone.';
-    }
-    if (step === 1) {
-      if (!consignee.name || !consignee.city || !consignee.state || !consignee.pin || !consignee.phone)
-        return 'Please fill Consignee Name, PIN, City, State, and Phone.';
-    }
-    if (step === 2) {
-      if (!shipment.actualWeight) return 'Please enter actual weight.';
-      if (!shipment.packages) return 'Please enter number of packages.';
-      if (!shipment.itemDescription) return 'Please enter item description.';
-      if (shipment.paymentType === 'COD' && !shipment.codPayeeName) return 'Please enter COD Payee Name.';
-    }
-    return '';
-  }
+  const addRow = () => setPackageRows(prev => [...prev, { ...emptyRow }]);
+  const removeRow = idx => setPackageRows(prev => prev.filter((_, i) => i !== idx));
+  const updateRow = (idx, field, value) =>
+    setPackageRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
 
-  function nextStep() {
-    const err = validateStep();
-    if (err) { setError(err); return; }
-    setError('');
-    setStep(s => s + 1);
-  }
-
-  async function handleSubmit() {
-    const err = validateStep();
-    if (err) { setError(err); return; }
+  const handleSubmit = async () => {
+    if (!consignor.name.trim()) { setError('Consignor name is required'); return; }
+    if (!consignor.phone.trim()) { setError('Consignor phone is required'); return; }
+    if (!consignee.name.trim()) { setError('Consignee name is required'); return; }
+    if (!consignee.phone.trim()) { setError('Consignee phone is required'); return; }
     setError('');
     setLoading(true);
     try {
-      const payload = {
+      let docketDate = null;
+      if (form.docketDate) {
+        const [h, m] = (form.docketTime || '12:00').split(':').map(Number);
+        let hours = h;
+        if (form.docketAmPm === 'PM' && hours < 12) hours += 12;
+        if (form.docketAmPm === 'AM' && hours === 12) hours = 0;
+        const d = new Date(form.docketDate);
+        d.setHours(hours, m, 0, 0);
+        docketDate = d.toISOString();
+      }
+
+      const { docketTime, docketAmPm, ...rest } = form;
+      const res = await api.post('/orders', {
+        ...rest,
+        docketDate,
         consignorName: consignor.name,
         consignorPin: consignor.pin,
         consignorAddressLine1: consignor.addressLine1,
@@ -117,6 +142,7 @@ export default function BookShipment() {
         consignorCity: consignor.city,
         consignorState: consignor.state,
         consignorContactPerson: consignor.contactPerson,
+        consignorCountryCode: consignor.countryCode,
         consignorPhone: consignor.phone,
         consignorEmail: consignor.email,
         consigneeName: consignee.name,
@@ -126,300 +152,363 @@ export default function BookShipment() {
         consigneeCity: consignee.city,
         consigneeState: consignee.state,
         consigneeContactPerson: consignee.contactPerson,
+        consigneeCountryCode: consignee.countryCode,
         consigneePhone: consignee.phone,
         consigneeEmail: consignee.email,
-        ...shipment,
-      };
-      const res = await api.post('/orders', payload);
+        items: packageRows.filter(r => r.description || r.packages),
+      });
       navigate(`/orders/${res.data.data.order.clientDocketNo}`);
     } catch (e) {
-      setError(e.response?.data?.message || 'Failed to create order. Please try again.');
+      setError(e.response?.data?.message || 'Failed to submit order. Please try again.');
     } finally {
       setLoading(false);
     }
-  }
+  };
+
+  const lbl = 'block text-sm font-medium text-gray-700 mb-1';
+  const sectionTitle = 'text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3';
 
   return (
-    <div className="max-w-3xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Book Shipment</h1>
+    <div className="max-w-5xl mx-auto space-y-4 pb-10">
+      <div>
+        <Link to="/dashboard" className="text-sm text-gray-400 hover:text-gray-600">← Dashboard</Link>
+        <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Book Shipment</h1>
+      </div>
 
-        {/* Stepper */}
-        <div className="flex items-center mb-8">
-          {STEPS.map((label, i) => (
-            <div key={i} className="flex items-center flex-1 last:flex-none">
-              <div className="flex flex-col items-center">
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-colors
-                  ${i < step ? 'bg-green-500 border-green-500 text-white'
-                    : i === step ? 'bg-blue-600 border-blue-600 text-white'
-                    : 'bg-white border-gray-300 text-gray-400'}`}>
-                  {i < step ? '✓' : i + 1}
-                </div>
-                <span className={`text-xs mt-1 text-center font-medium ${i === step ? 'text-blue-600' : 'text-gray-400'}`}>{label}</span>
-              </div>
-              {i < STEPS.length - 1 && (
-                <div className={`flex-1 h-0.5 mx-2 mb-4 ${i < step ? 'bg-green-400' : 'bg-gray-200'}`} />
-              )}
-            </div>
-          ))}
-        </div>
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">{error}</div>
+      )}
 
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>
-        )}
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-
-          {/* STEP 0: Consignor */}
-          {step === 0 && (
-            <div>
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">
-                Consignor Details <span className="text-sm font-normal text-gray-500">(Sender)</span>
-              </h2>
-              {addresses.length > 0 && (
-                <div className="mb-5">
-                  <label className="block text-sm font-medium text-gray-600 mb-1">Fill from saved address</label>
-                  <select className="input-field" onChange={e => { if (e.target.value) fillFromAddress('consignor', addresses.find(a => a.id === e.target.value)); }}>
-                    <option value="">-- Select saved address --</option>
-                    {addresses.map(a => <option key={a.id} value={a.id}>{a.label} — {a.city}</option>)}
-                  </select>
-                </div>
-              )}
-              <AddressForm values={consignor} onChange={handleConsignorChange} />
-            </div>
-          )}
-
-          {/* STEP 1: Consignee */}
-          {step === 1 && (
-            <div>
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">
-                Consignee Details <span className="text-sm font-normal text-gray-500">(Receiver)</span>
-              </h2>
-              {addresses.length > 0 && (
-                <div className="mb-5">
-                  <label className="block text-sm font-medium text-gray-600 mb-1">Fill from saved address</label>
-                  <select className="input-field" onChange={e => { if (e.target.value) fillFromAddress('consignee', addresses.find(a => a.id === e.target.value)); }}>
-                    <option value="">-- Select saved address --</option>
-                    {addresses.map(a => <option key={a.id} value={a.id}>{a.label} — {a.city}</option>)}
-                  </select>
-                </div>
-              )}
-              <AddressForm values={consignee} onChange={handleConsigneeChange} />
-            </div>
-          )}
-
-          {/* STEP 2: Shipment Details */}
-          {step === 2 && (
-            <div className="space-y-6">
-              <h2 className="text-lg font-semibold text-gray-800">Shipment Details</h2>
-
-              {/* Service Type */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Service Type <span className="text-red-500">*</span></label>
-                <div className="flex gap-3 flex-wrap">
-                  {SERVICE_TYPES.map(s => (
-                    <label key={s} className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 cursor-pointer transition-colors
-                      ${shipment.serviceType === s ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
-                      <input type="radio" name="serviceType" value={s} checked={shipment.serviceType === s} onChange={handleShipmentChange} className="sr-only" />
-                      {s}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Delivery Options */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Delivery Options</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { name: 'appointmentDelivery', label: 'Appointment Delivery' },
-                    { name: 'carrierRisk', label: 'Carrier Risk' },
-                    { name: 'ownersRisk', label: "Owner's Risk" },
-                    { name: 'mallDelivery', label: 'Mall Delivery' },
-                  ].map(opt => (
-                    <label key={opt.name} className="flex items-center gap-2 cursor-pointer select-none">
-                      <input type="checkbox" name={opt.name} checked={shipment[opt.name]} onChange={handleShipmentChange} className="w-4 h-4 text-blue-600 rounded border-gray-300" />
-                      <span className="text-sm text-gray-700">{opt.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Weight & Packages */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Actual Weight (kg) <span className="text-red-500">*</span></label>
-                  <input type="number" name="actualWeight" value={shipment.actualWeight} onChange={handleShipmentChange} placeholder="0.00" step="0.01" min="0" className="input-field" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">No. of Packages <span className="text-red-500">*</span></label>
-                  <input type="number" name="packages" value={shipment.packages} onChange={handleShipmentChange} placeholder="1" min="1" className="input-field" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Package Type</label>
-                  <select name="packagesType" value={shipment.packagesType} onChange={handleShipmentChange} className="input-field">
-                    {PACKAGE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Unit Weight (kg)</label>
-                  <input type="number" name="unitWeight" value={shipment.unitWeight} onChange={handleShipmentChange} placeholder="0.00" step="0.01" min="0" className="input-field" />
-                </div>
-              </div>
-
-              {/* Dimensions */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-gray-700">Dimensions (L × W × H)</label>
-                  <select name="dimensionUnit" value={shipment.dimensionUnit} onChange={handleShipmentChange} className="text-sm border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
-                    <option value="CMS">CMS</option>
-                    <option value="INCHES">INCHES</option>
-                  </select>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <input type="number" name="dimensionL" value={shipment.dimensionL} onChange={handleShipmentChange} placeholder="Length" step="0.1" min="0" className="input-field" />
-                  <input type="number" name="dimensionW" value={shipment.dimensionW} onChange={handleShipmentChange} placeholder="Width" step="0.1" min="0" className="input-field" />
-                  <input type="number" name="dimensionH" value={shipment.dimensionH} onChange={handleShipmentChange} placeholder="Height" step="0.1" min="0" className="input-field" />
-                </div>
-              </div>
-
-              {/* Item Description */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Item Description <span className="text-red-500">*</span></label>
-                <textarea name="itemDescription" value={shipment.itemDescription} onChange={handleShipmentChange} rows={2} placeholder="Describe the contents..." className="input-field resize-none" />
-              </div>
-
-              {/* Payment Type */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Payment Type <span className="text-red-500">*</span></label>
-                <div className="grid grid-cols-2 gap-3">
-                  {PAYMENT_TYPES.map(pt => (
-                    <label key={pt.value} className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 cursor-pointer transition-colors
-                      ${shipment.paymentType === pt.value ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
-                      <input type="radio" name="paymentType" value={pt.value} checked={shipment.paymentType === pt.value} onChange={handleShipmentChange} className="sr-only" />
-                      {pt.label}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {shipment.paymentType === 'COD' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">COD Payee Name <span className="text-red-500">*</span></label>
-                  <input type="text" name="codPayeeName" value={shipment.codPayeeName} onChange={handleShipmentChange} placeholder="Person to collect payment from" className="input-field" />
-                </div>
-              )}
-
-              {/* Invoice / Commercial Details — exact order as specified */}
-              <div>
-                <p className="text-sm font-semibold text-gray-700 mb-3 pb-1 border-b border-gray-100">Invoice &amp; Commercial Details</p>
-                <div className="grid grid-cols-2 gap-4">
-                  {/* 1. Invoice Value */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Value (₹)</label>
-                    <input type="number" name="invoiceValue" value={shipment.invoiceValue} onChange={handleShipmentChange} placeholder="0.00" step="0.01" min="0" className="input-field" />
-                  </div>
-                  {/* 2. Eway Bill No. */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">E-Way Bill No.</label>
-                    <input type="text" name="ewayBillNo" value={shipment.ewayBillNo} onChange={handleShipmentChange} placeholder="12-digit e-way bill number" className="input-field" />
-                  </div>
-                  {/* 3. HSN Code */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">HSN Code</label>
-                    <input type="text" name="hsnCode" value={shipment.hsnCode} onChange={handleShipmentChange} placeholder="e.g. 6203" className="input-field" />
-                  </div>
-                  {/* 4. Invoice Date */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Date</label>
-                    <input type="date" name="invoiceDate" value={shipment.invoiceDate} onChange={handleShipmentChange} className="input-field" />
-                  </div>
-                  {/* 5. Invoice No. */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Invoice No.</label>
-                    <input type="text" name="invoiceNo" value={shipment.invoiceNo} onChange={handleShipmentChange} placeholder="e.g. INV-2024-001" className="input-field" />
-                  </div>
-                  {/* 6. COD Amount */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">COD Amount (₹)</label>
-                    <input type="number" name="codAmount" value={shipment.codAmount} onChange={handleShipmentChange} placeholder="0.00" step="0.01" min="0" className="input-field" />
-                  </div>
-                  {/* 7. Quantity */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
-                    <input type="number" name="quantity" value={shipment.quantity} onChange={handleShipmentChange} placeholder="No. of items" min="1" className="input-field" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Special Instructions / Notes</label>
-                <textarea name="notes" value={shipment.notes} onChange={handleShipmentChange} rows={2} placeholder="Any special handling or delivery instructions..." className="input-field resize-none" />
-              </div>
-            </div>
-          )}
-
-          {/* Navigation */}
-          <div className="flex justify-between mt-8 pt-4 border-t border-gray-100">
-            <button type="button" onClick={() => { setError(''); setStep(s => s - 1); }} disabled={step === 0}
-              className="px-5 py-2 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-              ← Previous
-            </button>
-            {step < STEPS.length - 1 ? (
-              <button type="button" onClick={nextStep}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
-                Next →
-              </button>
-            ) : (
-              <button type="button" onClick={handleSubmit} disabled={loading}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors">
-                {loading ? 'Submitting…' : 'Submit Order'}
-              </button>
-            )}
+      {/* ── Section 1: Invoice & Commercial Details (Box) ── */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 border-l-4 border-l-blue-400">
+        <p className={sectionTitle}>Invoice &amp; Commercial Details</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <label className={lbl}>a. Invoice Value (₹)</label>
+            <input type="number" name="invoiceValue" value={form.invoiceValue} onChange={handleFormChange}
+              placeholder="0.00" step="0.01" min="0" className="input-field text-sm" />
+          </div>
+          <div>
+            <label className={lbl}>b. E-Way Bill No.</label>
+            <input type="text" name="ewayBillNo" value={form.ewayBillNo} onChange={handleFormChange}
+              placeholder="12-digit" className="input-field text-sm" />
+          </div>
+          <div>
+            <label className={lbl}>c. HSN Code</label>
+            <input type="text" name="hsnCode" value={form.hsnCode} onChange={handleFormChange}
+              placeholder="e.g. 6203" className="input-field text-sm" />
+          </div>
+          <div>
+            <label className={lbl}>d. Invoice Date</label>
+            <input type="date" name="invoiceDate" value={form.invoiceDate} onChange={handleFormChange}
+              className="input-field text-sm" />
+          </div>
+          <div>
+            <label className={lbl}>e. Invoice No.</label>
+            <input type="text" name="invoiceNo" value={form.invoiceNo} onChange={handleFormChange}
+              placeholder="INV-001" className="input-field text-sm" />
+          </div>
+          <div>
+            <label className={lbl}>f. COD Amount (₹)</label>
+            <input type="number" name="codAmount" value={form.codAmount} onChange={handleFormChange}
+              placeholder="0.00" step="0.01" min="0" className="input-field text-sm" />
+          </div>
+          <div>
+            <label className={lbl}>g. Quantity</label>
+            <input type="number" name="quantity" value={form.quantity} onChange={handleFormChange}
+              placeholder="0" min="1" className="input-field text-sm" />
           </div>
         </div>
+      </div>
+
+      {/* ── Section 2: Consignor + Consignee side by side ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Consignor */}
+        <PartyPanel
+          title="Consignor (Sender)"
+          party={consignor}
+          setPart={setConsignor}
+          handleChange={handleParty(setConsignor)}
+          addresses={addresses}
+          onSelect={addr => fillParty(setConsignor, addr)}
+          lbl={lbl}
+        />
+        {/* Consignee */}
+        <PartyPanel
+          title="Consignee (Receiver)"
+          party={consignee}
+          setPart={setConsignee}
+          handleChange={handleParty(setConsignee)}
+          addresses={addresses}
+          onSelect={addr => fillParty(setConsignee, addr)}
+          lbl={lbl}
+        />
+      </div>
+
+      {/* ── Section 3: Service + Checkboxes ── */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
+        <div>
+          <label className={lbl}>Service *</label>
+          <select name="serviceType" value={form.serviceType} onChange={handleFormChange}
+            className="input-field text-sm sm:w-48">
+            <option value="SURFACE">SURFACE</option>
+            <option value="AIR">AIR</option>
+            <option value="WATER">WATER</option>
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-2.5">
+          {[
+            { name: 'appointmentDelivery', label: 'a. Appointment Delivery' },
+            { name: 'carrierRisk', label: 'b. Carrier Risk' },
+            { name: 'mallDelivery', label: 'c. Mall Delivery' },
+            { name: 'ownersRisk', label: "d. Owner's Risk" },
+          ].map(opt => (
+            <label key={opt.name} className="flex items-center gap-2 cursor-pointer select-none text-sm text-gray-700">
+              <input type="checkbox" name={opt.name} checked={!!form[opt.name]} onChange={handleServiceOption}
+                className="w-4 h-4 rounded border-gray-300 text-blue-600" />
+              {opt.label}
+              {(opt.name === 'carrierRisk' || opt.name === 'ownersRisk') && (
+                <span className="text-xs text-gray-400">(exclusive)</span>
+              )}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Section 4: Package Details (multi-row box) ── */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 border-l-4 border-l-green-400">
+        <div className="flex items-center justify-between mb-4">
+          <p className={sectionTitle + ' mb-0'}>Package Details</p>
+          <button type="button" onClick={addRow}
+            className="text-xs font-medium text-blue-600 hover:text-blue-700 px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors">
+            + Add Row
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs min-w-[680px]">
+            <thead>
+              <tr className="border-b border-gray-100">
+                {['a. Description', 'b. Reference', 'c. Packages', 'd. Unit Weight', 'e. Dimensions (L × W × H)', ''].map(h => (
+                  <th key={h} className="text-left text-gray-400 font-medium pb-2 pr-3 whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {packageRows.map((row, idx) => (
+                <tr key={idx} className="border-b border-gray-50">
+                  <td className="py-2 pr-2">
+                    <input type="text" value={row.description} onChange={e => updateRow(idx, 'description', e.target.value)}
+                      placeholder="Contents" className="input-field text-xs" />
+                  </td>
+                  <td className="py-2 pr-2">
+                    <input type="text" value={row.reference} onChange={e => updateRow(idx, 'reference', e.target.value)}
+                      placeholder="Ref #" className="input-field text-xs" />
+                  </td>
+                  <td className="py-2 pr-2">
+                    <div className="flex gap-1">
+                      <input type="number" value={row.packages} onChange={e => updateRow(idx, 'packages', e.target.value)}
+                        placeholder="Qty" min="1" className="input-field text-xs" style={{minWidth:'3.5rem',width:'3.5rem'}} />
+                      <select value={row.packagesType} onChange={e => updateRow(idx, 'packagesType', e.target.value)}
+                        className="input-field text-xs" style={{minWidth:'5rem'}}>
+                        <option value="BAGS">Bags</option>
+                        <option value="PACKETS">Packets</option>
+                      </select>
+                    </div>
+                  </td>
+                  <td className="py-2 pr-2">
+                    <div className="flex gap-1 items-center">
+                      <input type="number" value={row.unitWeight} onChange={e => updateRow(idx, 'unitWeight', e.target.value)}
+                        placeholder="0.00" step="0.01" className="input-field text-xs" style={{minWidth:'4rem',width:'4rem'}} />
+                      <span className="text-gray-400 shrink-0">Kgs</span>
+                    </div>
+                  </td>
+                  <td className="py-2 pr-2">
+                    <div className="flex gap-1 items-center">
+                      <input type="number" value={row.dimensionL} onChange={e => updateRow(idx, 'dimensionL', e.target.value)}
+                        placeholder="L" step="0.1" className="input-field text-xs" style={{minWidth:'3.5rem',width:'3.5rem'}} />
+                      <span className="text-gray-300">×</span>
+                      <input type="number" value={row.dimensionW} onChange={e => updateRow(idx, 'dimensionW', e.target.value)}
+                        placeholder="W" step="0.1" className="input-field text-xs" style={{minWidth:'3.5rem',width:'3.5rem'}} />
+                      <span className="text-gray-300">×</span>
+                      <input type="number" value={row.dimensionH} onChange={e => updateRow(idx, 'dimensionH', e.target.value)}
+                        placeholder="H" step="0.1" className="input-field text-xs" style={{minWidth:'3.5rem',width:'3.5rem'}} />
+                      <select value={row.dimensionUnit} onChange={e => updateRow(idx, 'dimensionUnit', e.target.value)}
+                        className="input-field text-xs" style={{minWidth:'4rem'}}>
+                        <option value="CMS">cms</option>
+                        <option value="INCHES">in</option>
+                      </select>
+                    </div>
+                  </td>
+                  <td className="py-2 text-center">
+                    {packageRows.length > 1 && (
+                      <button type="button" onClick={() => removeRow(idx)}
+                        className="text-red-400 hover:text-red-600 text-lg leading-none w-6 h-6 flex items-center justify-center rounded hover:bg-red-50">
+                        ×
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ── Section 5: Payment Mode ── */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <p className={sectionTitle}>Payment Mode</p>
+        <div className="space-y-2.5">
+          {[
+            { value: 'PREPAID', label: 'a. Prepaid' },
+            { value: 'TO_PAY', label: 'b. To Pay' },
+            { value: 'TO_BILL', label: 'c. To Bill' },
+          ].map(opt => (
+            <label key={opt.value} className="flex items-center gap-2.5 cursor-pointer select-none text-sm text-gray-700">
+              <input type="radio" name="paymentType" value={opt.value} checked={form.paymentType === opt.value}
+                onChange={handleFormChange} className="text-blue-600 w-4 h-4" />
+              {opt.label}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Section 6: Bill To Party ── */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <label className={lbl}>Bill To Party</label>
+        <input type="text" name="billToParty" value={form.billToParty} onChange={handleFormChange}
+          placeholder="Party name" className="input-field text-sm sm:w-64" />
+      </div>
+
+      {/* ── Section 7: Docket Date ── */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <label className={lbl}>Docket Date</label>
+        <div className="flex gap-2 items-center flex-wrap">
+          <input type="date" name="docketDate" value={form.docketDate} onChange={handleFormChange}
+            className="input-field text-sm w-auto" />
+          <input type="time" name="docketTime" value={form.docketTime} onChange={handleFormChange}
+            className="input-field text-sm w-28" />
+          <select name="docketAmPm" value={form.docketAmPm} onChange={handleFormChange}
+            className="input-field text-sm w-16">
+            <option>AM</option>
+            <option>PM</option>
+          </select>
+        </div>
+      </div>
+
+      {/* ── Section 8: Material Hold + Waiting for Permits ── */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-3">
+        <label className="flex items-center gap-2.5 cursor-pointer select-none text-sm text-gray-700">
+          <input type="checkbox" name="materialHold" checked={form.materialHold} onChange={handleFormChange}
+            className="w-4 h-4 rounded border-gray-300 text-blue-600" />
+          a. Material Hold
+        </label>
+        <div>
+          <label className="flex items-center gap-2.5 cursor-pointer select-none text-sm text-gray-700">
+            <input type="checkbox" name="waitingPermit" checked={form.waitingPermit} onChange={handleFormChange}
+              className="w-4 h-4 rounded border-gray-300 text-blue-600" />
+            b. Waiting for Permits
+          </label>
+          <p className="text-xs text-gray-400 mt-1 ml-7">Permit depend on exit and entry states</p>
+        </div>
+      </div>
+
+      {/* ── Section 9: COD Payee Name (greyed out) ── */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <label className="block text-sm font-medium text-gray-300 mb-1">
+          COD Payee Name <span className="font-normal">(when COD is selected)</span>
+        </label>
+        <input type="text" name="codPayeeName" value={form.codPayeeName} disabled
+          placeholder="COD payee name"
+          className="input-field text-sm opacity-40 cursor-not-allowed bg-gray-50 sm:w-64" />
+      </div>
+
+      {/* ── Section 10: Notes ── */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <label className={lbl}>Notes</label>
+        <textarea name="notes" value={form.notes} onChange={handleFormChange}
+          placeholder="Special handling or delivery instructions…"
+          rows={3} className="input-field text-sm resize-y" />
+      </div>
+
+      {/* ── Submit ── */}
+      <div className="flex justify-end">
+        <button type="button" onClick={handleSubmit} disabled={loading}
+          className="px-8 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-60 transition-colors text-sm">
+          {loading ? 'Submitting…' : 'Submit Order'}
+        </button>
+      </div>
     </div>
   );
 }
 
-function AddressForm({ values, onChange }) {
+function PartyPanel({ title, party, handleChange, addresses, onSelect, lbl }) {
   return (
-    <div className="grid grid-cols-2 gap-4">
-      <div className="col-span-2">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Name / Company <span className="text-red-500">*</span></label>
-        <input type="text" name="name" value={values.name} onChange={onChange} placeholder="Full name or company name" className="input-field" />
-      </div>
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-2.5">
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">{title}</p>
+
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person</label>
-        <input type="text" name="contactPerson" value={values.contactPerson} onChange={onChange} placeholder="Authorized person" className="input-field" />
+        <label className={lbl}>Select from Address Book</label>
+        <select
+          value={party.id}
+          onChange={e => {
+            const addr = addresses.find(a => a.id === e.target.value);
+            if (addr) onSelect(addr);
+          }}
+          className="input-field text-sm"
+        >
+          <option value="">— Select or fill manually —</option>
+          {addresses.map(a => (
+            <option key={a.id} value={a.id}>{a.label}{a.city ? ` — ${a.city}` : ''}</option>
+          ))}
+        </select>
       </div>
+
+      <hr className="border-gray-100" />
+
+      {[
+        { label: title.split(' ')[0], field: 'name', placeholder: 'Name or company' },
+        { label: 'Pin', field: 'pin', placeholder: 'PIN code', maxLen: 6 },
+        { label: 'Line 1', field: 'addressLine1', placeholder: 'Street, building' },
+        { label: 'Line 2', field: 'addressLine2', placeholder: 'Landmark (optional)' },
+        { label: 'City', field: 'city', placeholder: 'City' },
+      ].map(({ label, field, placeholder, maxLen }) => (
+        <div key={field}>
+          <label className={lbl}>{label}</label>
+          <input type="text" name={field} value={party[field]} onChange={handleChange}
+            placeholder={placeholder} maxLength={maxLen} className="input-field text-sm" />
+        </div>
+      ))}
+
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Phone <span className="text-red-500">*</span></label>
-        <input type="tel" name="phone" value={values.phone} onChange={onChange} placeholder="10-digit mobile" className="input-field" />
+        <label className={lbl}>State</label>
+        <select name="state" value={party.state} onChange={handleChange} className="input-field text-sm">
+          <option value="">Select state</option>
+          {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
       </div>
-      <div className="col-span-2">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-        <input type="email" name="email" value={values.email} onChange={onChange} placeholder="email@example.com" className="input-field" />
-      </div>
-      <div className="col-span-2">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 1</label>
-        <input type="text" name="addressLine1" value={values.addressLine1} onChange={onChange} placeholder="Street, building, area" className="input-field" />
-      </div>
-      <div className="col-span-2">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 2</label>
-        <input type="text" name="addressLine2" value={values.addressLine2} onChange={onChange} placeholder="Landmark, locality (optional)" className="input-field" />
-      </div>
+
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">City <span className="text-red-500">*</span></label>
-        <input type="text" name="city" value={values.city} onChange={onChange} placeholder="City" className="input-field" />
+        <label className={lbl}>Contact</label>
+        <input type="text" name="contactPerson" value={party.contactPerson} onChange={handleChange}
+          placeholder="Contact person" className="input-field text-sm" />
       </div>
+
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">State <span className="text-red-500">*</span></label>
-        <input type="text" name="state" value={values.state} onChange={onChange} placeholder="State" className="input-field" />
+        <label className={lbl}>Phone</label>
+        <div className="flex gap-1.5">
+          <select name="countryCode" value={party.countryCode} onChange={handleChange}
+            className="input-field text-sm w-20 shrink-0">
+            {COUNTRY_CODES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
+          </select>
+          <input type="tel" name="phone" value={party.phone} onChange={handleChange}
+            placeholder="Phone number" className="input-field text-sm flex-1" />
+        </div>
       </div>
+
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">PIN Code <span className="text-red-500">*</span></label>
-        <input type="text" name="pin" value={values.pin} onChange={onChange} placeholder="6-digit PIN" maxLength={6} className="input-field" />
+        <label className={lbl}>Email</label>
+        <input type="email" name="email" value={party.email} onChange={handleChange}
+          placeholder="email@example.com" className="input-field text-sm" />
       </div>
     </div>
   );

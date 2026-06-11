@@ -8,14 +8,18 @@ async function createOrder(req, res) {
   try {
     const {
       consignorName, consignorPin, consignorAddressLine1, consignorAddressLine2,
-      consignorCity, consignorState, consignorContactPerson, consignorPhone, consignorEmail,
+      consignorCity, consignorState, consignorContactPerson,
+      consignorCountryCode, consignorPhone, consignorEmail,
       consigneeName, consigneePin, consigneeAddressLine1, consigneeAddressLine2,
-      consigneeCity, consigneeState, consigneeContactPerson, consigneePhone, consigneeEmail,
+      consigneeCity, consigneeState, consigneeContactPerson,
+      consigneeCountryCode, consigneePhone, consigneeEmail,
       serviceType, appointmentDelivery, carrierRisk, ownersRisk, mallDelivery,
       actualWeight, itemDescription, packages, packagesType, unitWeight,
       dimensionL, dimensionW, dimensionH, dimensionUnit,
       paymentType, codPayeeName, codAmount, notes,
       invoiceValue, invoiceNo, invoiceDate, ewayBillNo, hsnCode, quantity,
+      billToParty, docketDate, materialHold, waitingPermit,
+      items,
     } = req.body;
 
     if (!consignorName || !consigneeName || !serviceType || !paymentType) {
@@ -29,9 +33,13 @@ async function createOrder(req, res) {
         clientDocketNo,
         userId: req.user.id,
         consignorName, consignorPin, consignorAddressLine1, consignorAddressLine2,
-        consignorCity, consignorState, consignorContactPerson, consignorPhone, consignorEmail,
+        consignorCity, consignorState, consignorContactPerson,
+        consignorCountryCode: consignorCountryCode || '+91',
+        consignorPhone, consignorEmail,
         consigneeName, consigneePin, consigneeAddressLine1, consigneeAddressLine2,
-        consigneeCity, consigneeState, consigneeContactPerson, consigneePhone, consigneeEmail,
+        consigneeCity, consigneeState, consigneeContactPerson,
+        consigneeCountryCode: consigneeCountryCode || '+91',
+        consigneePhone, consigneeEmail,
         serviceType,
         appointmentDelivery: !!appointmentDelivery,
         carrierRisk: !!carrierRisk,
@@ -55,10 +63,33 @@ async function createOrder(req, res) {
         ewayBillNo: ewayBillNo || null,
         hsnCode: hsnCode || null,
         quantity: quantity ? parseInt(quantity) : null,
+        billToParty: billToParty || null,
+        docketDate: docketDate ? new Date(docketDate) : null,
+        materialHold: !!materialHold,
+        waitingPermit: !!waitingPermit,
         notes,
         status: 'PENDING',
       },
     });
+
+    if (Array.isArray(items) && items.length > 0) {
+      await prisma.orderItem.createMany({
+        data: items
+          .filter(r => r.description || r.packages)
+          .map(r => ({
+            orderId: order.id,
+            description: r.description || null,
+            reference: r.reference || null,
+            packages: r.packages ? parseInt(r.packages) : null,
+            packagesType: r.packagesType || 'BAGS',
+            unitWeight: r.unitWeight ? parseFloat(r.unitWeight) : null,
+            dimensionL: r.dimensionL ? parseFloat(r.dimensionL) : null,
+            dimensionW: r.dimensionW ? parseFloat(r.dimensionW) : null,
+            dimensionH: r.dimensionH ? parseFloat(r.dimensionH) : null,
+            dimensionUnit: r.dimensionUnit || 'CMS',
+          })),
+      });
+    }
 
     try {
       await sendMail({
@@ -171,12 +202,12 @@ async function listAddresses(req, res) {
 
 async function createAddress(req, res) {
   try {
-    const { label, companyName, contactName, phone, email, addressLine1, addressLine2, city, state, pincode, isDefault } = req.body;
+    const { label, companyName, contactName, countryCode, phone, email, addressLine1, addressLine2, city, state, pincode, isDefault } = req.body;
     if (isDefault) {
       await prisma.address.updateMany({ where: { userId: req.user.id }, data: { isDefault: false } });
     }
     const addr = await prisma.address.create({
-      data: { userId: req.user.id, label, companyName, contactName, phone, email, addressLine1, addressLine2, city, state, pincode, isDefault: !!isDefault },
+      data: { userId: req.user.id, label, companyName, contactName, countryCode: countryCode || '+91', phone, email, addressLine1, addressLine2, city, state, pincode, isDefault: !!isDefault },
     });
     return success(res, { address: addr }, 'Address saved', 201);
   } catch (e) {

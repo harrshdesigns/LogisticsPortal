@@ -113,6 +113,7 @@ model Address {
   city         String
   state        String
   pincode      String
+  countryCode  String   @default("+91")
   isDefault    Boolean  @default(false)
   createdAt    DateTime @default(now())
 
@@ -184,6 +185,12 @@ model Order {
   consignorCountryCode String           @default("+91")
   consigneeCountryCode String           @default("+91")
   promoCode            String?
+
+  // Booking preferences (set by customer, visible to admin)
+  billToParty   String?
+  docketDate    DateTime?
+  materialHold  Boolean  @default(false)
+  waitingPermit Boolean  @default(false)
 
   // Notes
   notes String?

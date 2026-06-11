@@ -6,7 +6,9 @@ import EmptyState from '../../components/shared/EmptyState'
 
 const STATES = ['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat','Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal','Delhi','Chandigarh','Jammu & Kashmir','Ladakh','Puducherry']
 
-const emptyForm = { label: '', contactName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', isDefault: false }
+const COUNTRY_CODES = ['+91','+1','+44','+61','+971','+65','+60','+66','+49','+33']
+
+const emptyForm = { label: '', contactName: '', countryCode: '+91', phone: '', email: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', isDefault: false }
 
 export default function AddressBook() {
   const [addresses, setAddresses] = useState([])
@@ -87,7 +89,16 @@ export default function AddressBook() {
             </div>
             <div>
               <label className="label">Phone *</label>
-              <input className="input" value={form.phone} onChange={set('phone')} required maxLength={10} />
+              <div className="flex gap-1.5">
+                <select className="input w-20 shrink-0" value={form.countryCode} onChange={set('countryCode')}>
+                  {COUNTRY_CODES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <input className="input flex-1" value={form.phone} onChange={set('phone')} required placeholder="Phone number" />
+              </div>
+            </div>
+            <div className="col-span-2">
+              <label className="label">Email</label>
+              <input className="input" type="email" value={form.email} onChange={set('email')} placeholder="email@example.com" />
             </div>
           </div>
           <div>
