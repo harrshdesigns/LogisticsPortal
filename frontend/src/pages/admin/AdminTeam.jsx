@@ -64,45 +64,81 @@ export default function AdminTeam() {
 
       <div className="card overflow-hidden">
         {loading ? <PageLoader /> : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-zinc-100 bg-zinc-50">
-                {['Name','Email','Role','Permissions','Status','Actions'].map(h => (
-                  <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-100 bg-zinc-50">
+                    {['Name','Email','Role','Permissions','Status','Actions'].map(h => (
+                      <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {admins.map(admin => (
+                    <tr key={admin.id} className="border-b border-zinc-50 hover:bg-zinc-50">
+                      <td className="px-5 py-3 font-semibold text-zinc-900">{admin.name}</td>
+                      <td className="px-5 py-3 text-zinc-600 text-xs">{admin.email}</td>
+                      <td className="px-5 py-3">
+                        <span className={`badge ${admin.role === 'SUPER_ADMIN' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {admin.role.replace('_', ' ')}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 max-w-xs">
+                        <div className="flex flex-wrap gap-1">
+                          {(admin.adminRole?.permissions || []).map(p => (
+                            <span key={p} className="badge bg-zinc-100 text-zinc-600 text-[10px]">{p.replace('_', ' ')}</span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3">
+                        <span className={`badge ${admin.isActive ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500'}`}>
+                          {admin.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        {admin.role !== 'SUPER_ADMIN' && (
+                          <button onClick={() => setEditModal(admin)} className="text-xs font-medium text-red-600 hover:text-red-700">Edit</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="md:hidden space-y-3 p-4">
               {admins.map(admin => (
-                <tr key={admin.id} className="border-b border-zinc-50 hover:bg-zinc-50">
-                  <td className="px-5 py-3 font-semibold text-zinc-900">{admin.name}</td>
-                  <td className="px-5 py-3 text-zinc-600 text-xs">{admin.email}</td>
-                  <td className="px-5 py-3">
-                    <span className={`badge ${admin.role === 'SUPER_ADMIN' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                <div key={admin.id} className="rounded-lg border border-zinc-200 bg-white p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-zinc-900">{admin.name}</p>
+                      <p className="text-xs text-zinc-500">{admin.email}</p>
+                    </div>
+                    <span className={`badge shrink-0 ${admin.role === 'SUPER_ADMIN' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
                       {admin.role.replace('_', ' ')}
                     </span>
-                  </td>
-                  <td className="px-5 py-3 max-w-xs">
-                    <div className="flex flex-wrap gap-1">
+                  </div>
+                  {(admin.adminRole?.permissions || []).length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
                       {(admin.adminRole?.permissions || []).map(p => (
                         <span key={p} className="badge bg-zinc-100 text-zinc-600 text-[10px]">{p.replace('_', ' ')}</span>
                       ))}
                     </div>
-                  </td>
-                  <td className="px-5 py-3">
+                  )}
+                  <div className="mt-2 flex items-center justify-between">
                     <span className={`badge ${admin.isActive ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500'}`}>
                       {admin.isActive ? 'Active' : 'Inactive'}
                     </span>
-                  </td>
-                  <td className="px-5 py-3">
                     {admin.role !== 'SUPER_ADMIN' && (
                       <button onClick={() => setEditModal(admin)} className="text-xs font-medium text-red-600 hover:text-red-700">Edit</button>
                     )}
-                  </td>
-                </tr>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
       </div>
 

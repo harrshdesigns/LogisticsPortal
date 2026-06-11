@@ -64,7 +64,7 @@ export default function Orders() {
           <EmptyState icon={<PackageIcon className="h-12 w-12" />} title="No orders found" description="Book your first shipment to get started." />
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-zinc-100 bg-zinc-50">
@@ -93,6 +93,25 @@ export default function Orders() {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="md:hidden space-y-3 p-4">
+              {orders.map(order => (
+                <div key={order.id} className="rounded-lg border border-zinc-200 bg-white p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <Link to={`/orders/${order.clientDocketNo}`} className="font-mono text-sm font-semibold text-red-600 hover:text-red-700">
+                      {order.clientDocketNo}
+                    </Link>
+                    <StatusBadge status={order.status} />
+                  </div>
+                  <p className="mt-1 text-sm text-zinc-700 truncate">{order.itemDescription || '—'}</p>
+                  <div className="mt-2 flex items-center justify-between text-xs text-zinc-400">
+                    <span>{order.serviceType}{order.actualWeight ? ` · ${order.actualWeight} kg` : ''}</span>
+                    <span>{new Date(order.createdAt).toLocaleDateString('en-IN')}</span>
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* Pagination */}

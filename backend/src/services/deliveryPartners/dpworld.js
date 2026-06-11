@@ -26,9 +26,9 @@ const DPWorldAdapter = {
     const now = Date.now();
     return {
       events: [
-        { status: 'BOOKED', description: 'Shipment booked with DP World', location: randomCity(), timestamp: new Date(now - 60 * 3600000).toISOString() },
+        { status: 'BOOKED', description: 'Shipment confirmed', location: randomCity(), timestamp: new Date(now - 60 * 3600000).toISOString() },
         { status: 'PICKED_UP', description: 'Package collected by courier', location: randomCity(), timestamp: new Date(now - 48 * 3600000).toISOString() },
-        { status: 'IN_TRANSIT', description: 'In transit via DP World network', location: randomCity(), timestamp: new Date(now - 30 * 3600000).toISOString() },
+        { status: 'IN_TRANSIT', description: 'In transit', location: randomCity(), timestamp: new Date(now - 30 * 3600000).toISOString() },
         { status: 'AT_HUB', description: 'Arrived at destination hub', location: randomCity(), timestamp: new Date(now - 10 * 3600000).toISOString() },
         { status: 'OUT_FOR_DELIVERY', description: 'Assigned to delivery agent', location: randomCity(), timestamp: new Date(now - 2 * 3600000).toISOString() },
       ],

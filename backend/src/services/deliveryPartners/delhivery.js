@@ -30,7 +30,7 @@ const DelhiveryAdapter = {
       events: [
         { status: 'PICKED_UP', description: 'Shipment picked up from shipper', location: randomCity(), timestamp: new Date(now - 72 * 3600000).toISOString() },
         { status: 'IN_TRANSIT', description: 'Shipment in transit', location: randomCity(), timestamp: new Date(now - 48 * 3600000).toISOString() },
-        { status: 'AT_HUB', description: 'Arrived at Delhivery hub', location: randomCity(), timestamp: new Date(now - 24 * 3600000).toISOString() },
+        { status: 'AT_HUB', description: 'Arrived at hub', location: randomCity(), timestamp: new Date(now - 24 * 3600000).toISOString() },
         { status: 'OUT_FOR_DELIVERY', description: 'Out for delivery', location: randomCity(), timestamp: new Date(now - 4 * 3600000).toISOString() },
       ],
     };

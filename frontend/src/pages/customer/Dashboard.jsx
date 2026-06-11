@@ -61,34 +61,55 @@ export default function Dashboard() {
             <Link to="/book" className="mt-3 btn-primary inline-flex">Book your first shipment</Link>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-zinc-100">
-                  <th className="px-6 py-3 text-left font-medium text-zinc-500">Docket No</th>
-                  <th className="px-6 py-3 text-left font-medium text-zinc-500">Commodity</th>
-                  <th className="px-6 py-3 text-left font-medium text-zinc-500">Service</th>
-                  <th className="px-6 py-3 text-left font-medium text-zinc-500">Status</th>
-                  <th className="px-6 py-3 text-left font-medium text-zinc-500">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((order) => (
-                  <tr key={order.id} className="border-b border-zinc-50 hover:bg-zinc-50 transition">
-                    <td className="px-6 py-3">
-                      <Link to={`/orders/${order.clientDocketNo}`} className="font-mono font-semibold text-red-600 hover:text-red-700">
-                        {order.clientDocketNo}
-                      </Link>
-                    </td>
-                    <td className="px-6 py-3 text-zinc-700">{order.itemDescription || '—'}</td>
-                    <td className="px-6 py-3 text-zinc-500">{order.serviceType}</td>
-                    <td className="px-6 py-3"><StatusBadge status={order.status} /></td>
-                    <td className="px-6 py-3 text-zinc-500">{new Date(order.createdAt).toLocaleDateString('en-IN')}</td>
+          <>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-100">
+                    <th className="px-6 py-3 text-left font-medium text-zinc-500">Docket No</th>
+                    <th className="px-6 py-3 text-left font-medium text-zinc-500">Commodity</th>
+                    <th className="px-6 py-3 text-left font-medium text-zinc-500">Service</th>
+                    <th className="px-6 py-3 text-left font-medium text-zinc-500">Status</th>
+                    <th className="px-6 py-3 text-left font-medium text-zinc-500">Date</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {orders.map((order) => (
+                    <tr key={order.id} className="border-b border-zinc-50 hover:bg-zinc-50 transition">
+                      <td className="px-6 py-3">
+                        <Link to={`/orders/${order.clientDocketNo}`} className="font-mono font-semibold text-red-600 hover:text-red-700">
+                          {order.clientDocketNo}
+                        </Link>
+                      </td>
+                      <td className="px-6 py-3 text-zinc-700">{order.itemDescription || '—'}</td>
+                      <td className="px-6 py-3 text-zinc-500">{order.serviceType}</td>
+                      <td className="px-6 py-3"><StatusBadge status={order.status} /></td>
+                      <td className="px-6 py-3 text-zinc-500">{new Date(order.createdAt).toLocaleDateString('en-IN')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="md:hidden space-y-3 p-4">
+              {orders.map((order) => (
+                <div key={order.id} className="rounded-lg border border-zinc-200 bg-white p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <Link to={`/orders/${order.clientDocketNo}`} className="font-mono font-semibold text-red-600 hover:text-red-700">
+                      {order.clientDocketNo}
+                    </Link>
+                    <StatusBadge status={order.status} />
+                  </div>
+                  <div className="mt-1 flex items-center justify-between text-xs text-zinc-500">
+                    <span>{order.itemDescription || '—'}</span>
+                    <span>{new Date(order.createdAt).toLocaleDateString('en-IN')}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
         )}
       </div>
     </div>

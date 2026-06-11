@@ -77,45 +77,82 @@ export default function AdminBilling() {
 
       <div className="card overflow-hidden">
         {loading ? <PageLoader /> : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-zinc-100 bg-zinc-50">
-                {['Invoice No','Customer','Period','Subtotal','Tax','Total','Status','Actions'].map(h => (
-                  <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {invoices.map(inv => (
-                <tr key={inv.id} className="border-b border-zinc-50 hover:bg-zinc-50">
-                  <td className="px-5 py-3 font-mono text-xs font-semibold text-zinc-900">{inv.invoiceNo}</td>
-                  <td className="px-5 py-3 text-zinc-700">{inv.user?.company || inv.user?.name}</td>
-                  <td className="px-5 py-3 text-zinc-500 text-xs">
+          <>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-100 bg-zinc-50">
+                    {['Invoice No','Customer','Period','Subtotal','Tax','Total','Status','Actions'].map(h => (
+                      <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.map(inv => (
+                    <tr key={inv.id} className="border-b border-zinc-50 hover:bg-zinc-50">
+                      <td className="px-5 py-3 font-mono text-xs font-semibold text-zinc-900">{inv.invoiceNo}</td>
+                      <td className="px-5 py-3 text-zinc-700">{inv.user?.company || inv.user?.name}</td>
+                      <td className="px-5 py-3 text-zinc-500 text-xs">
+                        {new Date(inv.dateFrom).toLocaleDateString('en-IN',{day:'numeric',month:'short'})} – {new Date(inv.dateTo).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}
+                      </td>
+                      <td className="px-5 py-3 text-zinc-700">₹{Number(inv.subtotal).toLocaleString('en-IN')}</td>
+                      <td className="px-5 py-3 text-zinc-500">₹{Number(inv.tax).toLocaleString('en-IN')}</td>
+                      <td className="px-5 py-3 font-semibold">₹{Number(inv.totalAmount).toLocaleString('en-IN')}</td>
+                      <td className="px-5 py-3"><StatusBadge status={inv.status} /></td>
+                      <td className="px-5 py-3 flex gap-2 flex-wrap">
+                        {inv.pdfUrl && (
+                          <a href={`/storage/pdfs/${inv.invoiceNo}.pdf`} target="_blank" rel="noreferrer"
+                            className="text-xs font-medium text-blue-600 hover:underline">PDF</a>
+                        )}
+                        {inv.status !== 'PAID' && (
+                          <button onClick={() => handleSend(inv.id)} disabled={sending === inv.id}
+                            className="text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50">
+                            {sending === inv.id ? 'Sending…' : 'Send'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {invoices.length === 0 && (
+                    <tr><td colSpan={8} className="py-10 text-center text-sm text-zinc-400">No invoices yet</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="md:hidden space-y-3 p-4">
+              {invoices.length === 0 ? (
+                <p className="text-center text-sm text-zinc-400 py-6">No invoices yet</p>
+              ) : invoices.map(inv => (
+                <div key={inv.id} className="rounded-lg border border-zinc-200 bg-white p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-mono text-xs font-semibold text-zinc-900">{inv.invoiceNo}</p>
+                    <StatusBadge status={inv.status} />
+                  </div>
+                  <p className="mt-1 text-sm font-medium text-zinc-800">{inv.user?.company || inv.user?.name}</p>
+                  <p className="text-xs text-zinc-500">
                     {new Date(inv.dateFrom).toLocaleDateString('en-IN',{day:'numeric',month:'short'})} – {new Date(inv.dateTo).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}
-                  </td>
-                  <td className="px-5 py-3 text-zinc-700">₹{Number(inv.subtotal).toLocaleString('en-IN')}</td>
-                  <td className="px-5 py-3 text-zinc-500">₹{Number(inv.tax).toLocaleString('en-IN')}</td>
-                  <td className="px-5 py-3 font-semibold">₹{Number(inv.totalAmount).toLocaleString('en-IN')}</td>
-                  <td className="px-5 py-3"><StatusBadge status={inv.status} /></td>
-                  <td className="px-5 py-3 flex gap-2 flex-wrap">
-                    {inv.pdfUrl && (
-                      <a href={`/storage/pdfs/${inv.invoiceNo}.pdf`} target="_blank" rel="noreferrer"
-                        className="text-xs font-medium text-blue-600 hover:underline">PDF</a>
-                    )}
-                    {inv.status !== 'PAID' && (
-                      <button onClick={() => handleSend(inv.id)} disabled={sending === inv.id}
-                        className="text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50">
-                        {sending === inv.id ? 'Sending…' : 'Send'}
-                      </button>
-                    )}
-                  </td>
-                </tr>
+                  </p>
+                  <div className="mt-2 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-zinc-900">₹{Number(inv.totalAmount).toLocaleString('en-IN')}</p>
+                    <div className="flex gap-3">
+                      {inv.pdfUrl && (
+                        <a href={`/storage/pdfs/${inv.invoiceNo}.pdf`} target="_blank" rel="noreferrer"
+                          className="text-xs font-medium text-blue-600 hover:underline">PDF</a>
+                      )}
+                      {inv.status !== 'PAID' && (
+                        <button onClick={() => handleSend(inv.id)} disabled={sending === inv.id}
+                          className="text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50">
+                          {sending === inv.id ? 'Sending…' : 'Send'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
               ))}
-              {invoices.length === 0 && (
-                <tr><td colSpan={8} className="py-10 text-center text-sm text-zinc-400">No invoices yet</td></tr>
-              )}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
       </div>
 

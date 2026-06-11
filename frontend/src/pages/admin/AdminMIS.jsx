@@ -46,7 +46,7 @@ export default function AdminMIS() {
             <input className="input" type="date" value={form.dateTo} onChange={e => setForm(f => ({ ...f, dateTo: e.target.value }))} required />
           </div>
           <button type="submit" className="btn-primary" disabled={generating}>
-            {generating ? 'Generating…' : '📊 Generate Report'}
+            {generating ? 'Generating…' : 'Generate Report'}
           </button>
         </form>
         {msg && <p className={`mt-3 text-sm ${msg.startsWith('MIS') ? 'text-green-700' : 'text-red-600'}`}>{msg}</p>}
@@ -60,36 +60,62 @@ export default function AdminMIS() {
         {loading ? <PageLoader /> : reports.length === 0 ? (
           <p className="py-10 text-center text-sm text-zinc-400">No reports generated yet</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-zinc-100 bg-zinc-50">
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-zinc-500">Report Date</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-zinc-500">Generated</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-zinc-500">Sent At</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-zinc-500">Download</th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-100 bg-zinc-50">
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-zinc-500">Report Date</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-zinc-500">Generated</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-zinc-500">Sent At</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-zinc-500">Download</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reports.map(r => (
+                    <tr key={r.id} className="border-b border-zinc-50 hover:bg-zinc-50">
+                      <td className="px-5 py-3 font-medium text-zinc-900">{new Date(r.reportDate).toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</td>
+                      <td className="px-5 py-3 text-zinc-500">{new Date(r.createdAt).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</td>
+                      <td className="px-5 py-3 text-zinc-500">{r.sentAt ? new Date(r.sentAt).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+                      <td className="px-5 py-3">
+                        {r.pdfUrl ? (
+                          <a href={`/api/admin/mis/${r.id}/download`} target="_blank" rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700">
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            PDF
+                          </a>
+                        ) : <span className="text-xs text-zinc-400">—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="md:hidden space-y-3 p-4">
               {reports.map(r => (
-                <tr key={r.id} className="border-b border-zinc-50 hover:bg-zinc-50">
-                  <td className="px-5 py-3 font-medium text-zinc-900">{new Date(r.reportDate).toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</td>
-                  <td className="px-5 py-3 text-zinc-500">{new Date(r.createdAt).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</td>
-                  <td className="px-5 py-3 text-zinc-500">{r.sentAt ? new Date(r.sentAt).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
-                  <td className="px-5 py-3">
+                <div key={r.id} className="rounded-lg border border-zinc-200 bg-white p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-medium text-zinc-900">{new Date(r.reportDate).toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</p>
                     {r.pdfUrl ? (
                       <a href={`/api/admin/mis/${r.id}/download`} target="_blank" rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700">
+                        className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700 shrink-0">
                         <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                         </svg>
                         PDF
                       </a>
-                    ) : <span className="text-xs text-zinc-400">—</span>}
-                  </td>
-                </tr>
+                    ) : <span className="text-xs text-zinc-400 shrink-0">No PDF</span>}
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-500">Generated: {new Date(r.createdAt).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</p>
+                  {r.sentAt && <p className="text-xs text-zinc-400">Sent: {new Date(r.sentAt).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</p>}
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
       </div>
     </div>

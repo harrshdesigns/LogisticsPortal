@@ -109,7 +109,7 @@ async function assignAndBook(req, res) {
       invoiceValue, invoiceNo, invoiceDate, ewayBillNo, hsnCode, quantity,
       itemDescription,
       // admin-only fields
-      loginId, docketDate, pickupOption, billToParty,
+      partnerDocketNo, loginId, docketDate, pickupOption, billToParty,
       materialHold, waitingPermit, deliveryCode, notes,
       // package rows
       items,
@@ -141,7 +141,7 @@ async function assignAndBook(req, res) {
     const shipment = await prisma.shipment.upsert({
       where: { orderId: order.id },
       update: {
-        partnerName, partnerDocketNo: result.partnerDocketNo,
+        partnerName, partnerDocketNo: partnerDocketNo || result.partnerDocketNo,
         loginId: resolvedLoginId,
         docketDate: docketDate ? new Date(docketDate) : new Date(),
         pickupOption: pickupOption || null,
@@ -154,7 +154,7 @@ async function assignAndBook(req, res) {
         bookedByAdminId: req.user.id,
       },
       create: {
-        orderId: order.id, partnerName, partnerDocketNo: result.partnerDocketNo,
+        orderId: order.id, partnerName, partnerDocketNo: partnerDocketNo || result.partnerDocketNo,
         loginId: resolvedLoginId,
         docketDate: docketDate ? new Date(docketDate) : new Date(),
         pickupOption: pickupOption || null,
@@ -238,7 +238,7 @@ async function assignAndBook(req, res) {
       data: {
         shipmentId: shipment.id,
         status: 'BOOKED',
-        description: `Shipment booked with ${partnerName}`,
+        description: 'Shipment booked successfully',
         location: order.consignorCity || 'Origin',
         timestamp: new Date(),
         source: 'API',

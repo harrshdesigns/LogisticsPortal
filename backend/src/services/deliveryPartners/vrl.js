@@ -28,8 +28,8 @@ const VRLAdapter = {
       events: [
         { status: 'BOOKED', description: 'LR generated at origin branch', location: randomCity(), timestamp: new Date(now - 80 * 3600000).toISOString() },
         { status: 'PICKED_UP', description: 'Goods collected from shipper', location: randomCity(), timestamp: new Date(now - 72 * 3600000).toISOString() },
-        { status: 'IN_TRANSIT', description: 'Loaded into VRL truck', location: randomCity(), timestamp: new Date(now - 50 * 3600000).toISOString() },
-        { status: 'AT_HUB', description: 'Reached VRL destination branch', location: randomCity(), timestamp: new Date(now - 20 * 3600000).toISOString() },
+        { status: 'IN_TRANSIT', description: 'In transit', location: randomCity(), timestamp: new Date(now - 50 * 3600000).toISOString() },
+        { status: 'AT_HUB', description: 'Arrived at destination hub', location: randomCity(), timestamp: new Date(now - 20 * 3600000).toISOString() },
       ],
     };
   },

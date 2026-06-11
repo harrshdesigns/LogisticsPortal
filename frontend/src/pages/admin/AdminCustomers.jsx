@@ -27,36 +27,66 @@ export default function AdminCustomers() {
       <div className="card overflow-hidden">
         {loading ? <PageLoader /> : (
           <>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-zinc-100 bg-zinc-50">
-                  {['Company','Contact','Email','Phone','GSTIN','Total Orders','Last Order','Status'].map(h => (
-                    <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">{h}</th>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-100 bg-zinc-50">
+                    {['Company','Contact','Email','Phone','GSTIN','Total Orders','Last Order','Status'].map(h => (
+                      <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {customers.map(c => (
+                    <tr key={c.id} className="border-b border-zinc-50 hover:bg-zinc-50">
+                      <td className="px-5 py-3 font-semibold text-zinc-900">{c.company || '—'}</td>
+                      <td className="px-5 py-3 text-zinc-700">{c.name}</td>
+                      <td className="px-5 py-3 text-zinc-600 text-xs">{c.email}</td>
+                      <td className="px-5 py-3 text-zinc-500">{c.phone || '—'}</td>
+                      <td className="px-5 py-3 text-zinc-400 text-xs font-mono">{c.gstin || '—'}</td>
+                      <td className="px-5 py-3 text-center font-semibold text-zinc-800">{c._count?.orders || 0}</td>
+                      <td className="px-5 py-3 text-zinc-400 text-xs">
+                        {c.orders?.[0]?.createdAt ? new Date(c.orders[0].createdAt).toLocaleDateString('en-IN') : '—'}
+                      </td>
+                      <td className="px-5 py-3">
+                        <span className={`badge ${c.isActive ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500'}`}>
+                          {c.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                    </tr>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            {customers.length === 0 ? (
+              <p className="py-10 text-center text-sm text-zinc-400">No customers found</p>
+            ) : (
+              <div className="md:hidden space-y-3 p-4">
                 {customers.map(c => (
-                  <tr key={c.id} className="border-b border-zinc-50 hover:bg-zinc-50">
-                    <td className="px-5 py-3 font-semibold text-zinc-900">{c.company || '—'}</td>
-                    <td className="px-5 py-3 text-zinc-700">{c.name}</td>
-                    <td className="px-5 py-3 text-zinc-600 text-xs">{c.email}</td>
-                    <td className="px-5 py-3 text-zinc-500">{c.phone || '—'}</td>
-                    <td className="px-5 py-3 text-zinc-400 text-xs font-mono">{c.gstin || '—'}</td>
-                    <td className="px-5 py-3 text-center font-semibold text-zinc-800">{c._count?.orders || 0}</td>
-                    <td className="px-5 py-3 text-zinc-400 text-xs">
-                      {c.orders?.[0]?.createdAt ? new Date(c.orders[0].createdAt).toLocaleDateString('en-IN') : '—'}
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className={`badge ${c.isActive ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500'}`}>
+                  <div key={c.id} className="rounded-lg border border-zinc-200 bg-white p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-semibold text-zinc-900">{c.company || c.name}</p>
+                        {c.company && <p className="text-xs text-zinc-500">{c.name}</p>}
+                      </div>
+                      <span className={`badge shrink-0 ${c.isActive ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500'}`}>
                         {c.isActive ? 'Active' : 'Inactive'}
                       </span>
-                    </td>
-                  </tr>
+                    </div>
+                    <div className="mt-2 space-y-0.5 text-xs text-zinc-500">
+                      <p>{c.email}</p>
+                      {c.phone && <p>{c.phone}</p>}
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-xs text-zinc-400">
+                      <span>{c._count?.orders || 0} orders</span>
+                      {c.orders?.[0]?.createdAt && <span>Last: {new Date(c.orders[0].createdAt).toLocaleDateString('en-IN')}</span>}
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-            {customers.length === 0 && <p className="py-10 text-center text-sm text-zinc-400">No customers found</p>}
+              </div>
+            )}
 
             {totalPages > 1 && (
               <div className="flex items-center justify-between border-t border-zinc-100 px-6 py-3">

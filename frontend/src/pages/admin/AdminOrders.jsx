@@ -70,7 +70,7 @@ export default function AdminOrders() {
       <div className="card overflow-hidden">
         {loading ? <PageLoader /> : (
           <>
-            <div className="overflow-x-auto">
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-zinc-100 bg-zinc-50">
@@ -109,6 +109,29 @@ export default function AdminOrders() {
               {orders.length === 0 && (
                 <p className="px-6 py-10 text-center text-sm text-zinc-400">No orders found</p>
               )}
+            </div>
+
+            {/* Mobile cards */}
+            <div className="md:hidden space-y-3 p-4">
+              {orders.length === 0 ? (
+                <p className="text-center text-sm text-zinc-400 py-6">No orders found</p>
+              ) : orders.map(o => (
+                <div key={o.id} className="rounded-lg border border-zinc-200 bg-white p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-mono text-xs font-semibold text-blue-700">{o.clientDocketNo}</p>
+                      {o.isDirectBooking && <span className="mt-0.5 inline-block text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full">Direct</span>}
+                    </div>
+                    <StatusBadge status={o.status} />
+                  </div>
+                  <p className="mt-2 text-sm font-medium text-zinc-800">{o.user?.company || o.user?.name || o.consignorName || '—'}</p>
+                  {o.consignorCity && <p className="text-xs text-zinc-400">{o.consignorCity}, {o.consignorState}</p>}
+                  <div className="mt-2 flex items-center justify-between">
+                    <p className="text-xs text-zinc-500">{o.shipment?.partnerName?.replace('_', ' ') || '—'} · {new Date(o.createdAt).toLocaleDateString('en-IN')}</p>
+                    <Link to={`/admin/orders/${o.id}`} className="text-xs font-medium text-blue-600 hover:text-blue-700">View →</Link>
+                  </div>
+                </div>
+              ))}
             </div>
 
             {totalPages > 1 && (

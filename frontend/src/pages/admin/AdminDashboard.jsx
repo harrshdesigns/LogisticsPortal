@@ -65,7 +65,7 @@ export default function AdminDashboard() {
             <h2 className="text-sm font-semibold text-zinc-700">Recent Orders</h2>
             <Link to="/admin/orders" className="text-xs font-medium text-red-600 hover:text-red-700">View all →</Link>
           </div>
-          <div className="overflow-x-auto">
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-zinc-50">
@@ -88,6 +88,21 @@ export default function AdminDashboard() {
                 ))}
               </tbody>
             </table>
+          </div>
+          {/* Mobile cards */}
+          <div className="md:hidden space-y-2 p-4">
+            {(stats?.recentOrders || []).map(o => (
+              <div key={o.id} className="rounded-lg border border-zinc-200 bg-white p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <Link to={`/admin/orders/${o.id}`} className="font-mono text-xs font-semibold text-red-600 hover:text-red-700">{o.clientDocketNo}</Link>
+                  <StatusBadge status={o.status} />
+                </div>
+                <div className="mt-1 flex items-center justify-between text-xs">
+                  <span className="text-zinc-600">{o.user?.company || o.user?.name}</span>
+                  <span className="text-zinc-400">{o.shipment?.partnerName?.replace('_', ' ') || '—'}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

@@ -7,8 +7,8 @@ const NAV = [
   { to: '/admin', label: 'Dashboard', icon: <DashboardIcon className="h-4 w-4" />, end: true },
   { to: '/admin/orders', label: 'Orders', icon: <PackageIcon className="h-4 w-4" /> },
   { to: '/admin/customers', label: 'Customers', icon: <UsersIcon className="h-4 w-4" /> },
-  { to: '/admin/billing', label: 'Billing', icon: <DocumentIcon className="h-4 w-4" /> },
-  { to: '/admin/mis', label: 'MIS Reports', icon: <ChartBarIcon className="h-4 w-4" /> },
+  { to: '/admin/billing', label: 'Billing', icon: <DocumentIcon className="h-4 w-4" />, hidden: true },
+  { to: '/admin/mis', label: 'MIS Reports', icon: <ChartBarIcon className="h-4 w-4" />, hidden: true },
   { to: '/admin/team', label: 'Team', icon: <KeyIcon className="h-4 w-4" />, superAdminOnly: true },
   { to: '/admin/settings', label: 'Settings', icon: <CogIcon className="h-4 w-4" /> },
 ]
@@ -20,7 +20,7 @@ export default function AdminLayout() {
 
   const handleLogout = () => { logout(); navigate('/admin/login') }
 
-  const visibleNav = NAV.filter(n => !n.superAdminOnly || user?.role === 'SUPER_ADMIN')
+  const visibleNav = NAV.filter(n => !n.hidden && (!n.superAdminOnly || user?.role === 'SUPER_ADMIN'))
 
   const Sidebar = () => (
     <aside className="flex h-full flex-col">

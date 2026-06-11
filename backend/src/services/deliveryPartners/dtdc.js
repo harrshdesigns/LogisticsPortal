@@ -28,7 +28,7 @@ const DTDCAdapter = {
       events: [
         { status: 'PICKED_UP', description: 'Shipment picked up', location: randomCity(), timestamp: new Date(now - 65 * 3600000).toISOString() },
         { status: 'IN_TRANSIT', description: 'In transit to destination', location: randomCity(), timestamp: new Date(now - 45 * 3600000).toISOString() },
-        { status: 'AT_HUB', description: 'Arrived at DTDC hub', location: randomCity(), timestamp: new Date(now - 12 * 3600000).toISOString() },
+        { status: 'AT_HUB', description: 'Arrived at hub', location: randomCity(), timestamp: new Date(now - 12 * 3600000).toISOString() },
       ],
     };
   },
