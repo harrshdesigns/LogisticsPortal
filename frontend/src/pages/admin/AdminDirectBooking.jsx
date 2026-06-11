@@ -33,9 +33,6 @@ const emptyRow = {
   unitWeight: '', dimensionL: '', dimensionW: '', dimensionH: '', dimensionUnit: 'CMS',
 };
 
-function genConsignmentNo() {
-  return `CLT-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
-}
 
 export default function AdminDirectBooking() {
   const navigate = useNavigate();
@@ -60,8 +57,8 @@ export default function AdminDirectBooking() {
     codAmount: '',
     quantity: '',
 
-    // Consignment #
-    consignmentNo: genConsignmentNo(),
+    // Partner's pre-allocated docket number
+    partnerDocketNo: '',
 
     // Consignor
     consignorId: '',
@@ -202,7 +199,7 @@ export default function AdminDirectBooking() {
     if (!form.consignorName.trim()) { setError('Consignor name is required'); return; }
     if (!form.consigneeName.trim()) { setError('Consignee name is required'); return; }
     if (!form.serviceType) { setError('Service type is required'); return; }
-    if (!form.consignmentNo.trim()) { setError('Consignment # is required'); return; }
+    if (!form.partnerDocketNo.trim()) { setError('Consignment # (partner docket) is required'); return; }
     setError('');
     setLoading(true);
     try {
@@ -314,12 +311,12 @@ export default function AdminDirectBooking() {
         </div>
       </div>
 
-      {/* ── Section 3: Consignment # ── */}
+      {/* ── Section 3: Consignment # (partner docket) ── */}
       <div className="card p-5">
         <label className={lbl}>Consignment # *</label>
-        <input type="text" name="consignmentNo" value={form.consignmentNo} onChange={handleChange}
-          placeholder="CLT-YYYY-XXXXX" className="input font-mono text-sm sm:w-56" required />
-        <p className="text-xs text-zinc-400 mt-1">Auto-generated — edit if needed</p>
+        <input type="text" name="partnerDocketNo" value={form.partnerDocketNo} onChange={handleChange}
+          placeholder="Partner-issued docket number" className="input font-mono text-sm sm:w-64" required />
+        <p className="text-xs text-zinc-400 mt-1">Enter the docket number issued by the delivery partner. An app tracking number is auto-generated separately for the customer.</p>
       </div>
 
       {/* ── Section 4: Consignor + Consignee (side by side) ── */}

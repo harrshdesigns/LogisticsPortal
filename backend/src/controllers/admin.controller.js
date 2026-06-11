@@ -234,7 +234,7 @@ async function createDirectBooking(req, res) {
   try {
     const {
       // Booking meta
-      consignmentNo, consignmentType, requestedBy, primaryServiceProvider,
+      partnerDocketNo, consignmentType, requestedBy, primaryServiceProvider,
       // Consignor
       consignorName, consignorPin, consignorAddressLine1, consignorAddressLine2,
       consignorCity, consignorState, consignorContactPerson, consignorCountryCode, consignorPhone, consignorEmail,
@@ -260,10 +260,8 @@ async function createDirectBooking(req, res) {
       return failure(res, 'Consignor, consignee, and service type are required', 400);
     }
 
-    // Use provided consignment number or auto-generate
-    const clientDocketNo = consignmentNo && consignmentNo.trim()
-      ? consignmentNo.trim()
-      : await generateDocketNo();
+    // Always auto-generate the app docket — customer tracks with this, never sees partner docket
+    const clientDocketNo = await generateDocketNo();
 
     const order = await prisma.order.create({
       data: {
@@ -326,6 +324,7 @@ async function createDirectBooking(req, res) {
         data: {
           orderId: order.id,
           partnerName: primaryServiceProvider,
+          partnerDocketNo: partnerDocketNo ? partnerDocketNo.trim() : null,
           loginId: requestedBy || null,
           docketDate: docketDate ? new Date(docketDate) : new Date(),
           pickupOption: pickupOption || null,
@@ -339,7 +338,7 @@ async function createDirectBooking(req, res) {
 
     return success(res, { order }, 'Direct booking created', 201);
   } catch (e) {
-    if (e.code === 'P2002') return failure(res, 'Consignment number already exists — please use a different one', 409);
+    if (e.code === 'P2002') return failure(res, 'Duplicate entry — please try again', 409);
     return failure(res, 'Failed to create direct booking', 500, e.message);
   }
 }

@@ -9,7 +9,7 @@ const NAV = [
   { to: '/admin/billing', label: 'Billing', icon: '🧾' },
   { to: '/admin/mis', label: 'MIS Reports', icon: '📊' },
   { to: '/admin/team', label: 'Team', icon: '🔑', superAdminOnly: true },
-  { to: '/admin/settings', label: 'Settings', icon: '⚙️', superAdminOnly: true },
+  { to: '/admin/settings', label: 'Settings', icon: '⚙️' },
 ]
 
 export default function AdminLayout() {
