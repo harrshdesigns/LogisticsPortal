@@ -31,6 +31,13 @@ enum PackageType {
   PACKAGES
   BOXES
   BAGS
+  PACKETS
+}
+
+enum ConsignmentType {
+  OUTBOUND
+  INBOUND
+  RETURN
 }
 
 enum DimensionUnit {
@@ -171,6 +178,13 @@ model Order {
   hsnCode      String?
   quantity     Int?
 
+  // Booking Meta
+  consignmentType      ConsignmentType?
+  requestedBy          String?
+  consignorCountryCode String           @default("+91")
+  consigneeCountryCode String           @default("+91")
+  promoCode            String?
+
   // Notes
   notes String?
 
@@ -187,8 +201,9 @@ model Order {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
-  user     User?     @relation(fields: [userId], references: [id])
+  user     User?       @relation(fields: [userId], references: [id])
   shipment Shipment?
+  items    OrderItem[]
 }
 
 model Shipment {
@@ -270,6 +285,54 @@ model PartnerCredential {
   baseUrl     String?
   extraConfig Json?
   updatedAt   DateTime    @updatedAt
+}
+
+model OrderItem {
+  id            String  @id @default(uuid())
+  orderId       String
+  description   String?
+  reference     String?
+  packages      Int?
+  packagesType  String  @default("BAGS")
+  unitWeight    Float?
+  dimensionL    Float?
+  dimensionW    Float?
+  dimensionH    Float?
+  dimensionUnit String  @default("CMS")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model SavedConsignor {
+  id            String   @id @default(uuid())
+  name          String
+  pin           String?
+  addressLine1  String?
+  addressLine2  String?
+  city          String?
+  state         String?
+  contactPerson String?
+  countryCode   String   @default("+91")
+  phone         String?
+  email         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model SavedConsignee {
+  id            String   @id @default(uuid())
+  name          String
+  pin           String?
+  addressLine1  String?
+  addressLine2  String?
+  city          String?
+  state         String?
+  contactPerson String?
+  countryCode   String   @default("+91")
+  phone         String?
+  email         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model Counter {

@@ -233,41 +233,60 @@ async function assignAndBook(req, res) {
 async function createDirectBooking(req, res) {
   try {
     const {
+      // Booking meta
+      consignmentNo, consignmentType, requestedBy, primaryServiceProvider,
+      // Consignor
       consignorName, consignorPin, consignorAddressLine1, consignorAddressLine2,
-      consignorCity, consignorState, consignorContactPerson, consignorPhone, consignorEmail,
+      consignorCity, consignorState, consignorContactPerson, consignorCountryCode, consignorPhone, consignorEmail,
+      // Consignee
       consigneeName, consigneePin, consigneeAddressLine1, consigneeAddressLine2,
-      consigneeCity, consigneeState, consigneeContactPerson, consigneePhone, consigneeEmail,
+      consigneeCity, consigneeState, consigneeContactPerson, consigneeCountryCode, consigneePhone, consigneeEmail,
+      // Service
       serviceType, appointmentDelivery, carrierRisk, ownersRisk, mallDelivery,
-      actualWeight, itemDescription, packages, packagesType, unitWeight,
-      dimensionL, dimensionW, dimensionH, dimensionUnit,
-      paymentType, codPayeeName, codAmount, notes,
-      invoiceValue, invoiceNo, invoiceDate, ewayBillNo, hsnCode, quantity,
+      // Weight
+      actualWeight,
+      // Invoice / Commercial
+      invoiceValue, invoiceNo, invoiceDate, ewayBillNo, hsnCode, quantity, codAmount,
+      // Payment
+      paymentType, codPayeeName,
+      // Misc
+      billToParty, docketDate, pickupOption, materialHold, waitingPermit, deliveryCode,
+      promoCode, notes,
+      // Package rows
+      items,
     } = req.body;
 
-    if (!consignorName || !consigneeName || !serviceType || !paymentType) {
-      return failure(res, 'Missing required fields', 400);
+    if (!consignorName || !consigneeName || !serviceType) {
+      return failure(res, 'Consignor, consignee, and service type are required', 400);
     }
 
-    const clientDocketNo = await generateDocketNo();
+    // Use provided consignment number or auto-generate
+    const clientDocketNo = consignmentNo && consignmentNo.trim()
+      ? consignmentNo.trim()
+      : await generateDocketNo();
+
     const order = await prisma.order.create({
       data: {
-        clientDocketNo, isDirectBooking: true,
+        clientDocketNo,
+        isDirectBooking: true,
+        consignmentType: consignmentType || null,
+        requestedBy: requestedBy || null,
         consignorName, consignorPin, consignorAddressLine1, consignorAddressLine2,
-        consignorCity, consignorState, consignorContactPerson, consignorPhone, consignorEmail,
+        consignorCity, consignorState, consignorContactPerson,
+        consignorCountryCode: consignorCountryCode || '+91',
+        consignorPhone, consignorEmail,
         consigneeName, consigneePin, consigneeAddressLine1, consigneeAddressLine2,
-        consigneeCity, consigneeState, consigneeContactPerson, consigneePhone, consigneeEmail,
+        consigneeCity, consigneeState, consigneeContactPerson,
+        consigneeCountryCode: consigneeCountryCode || '+91',
+        consigneePhone, consigneeEmail,
         serviceType,
-        appointmentDelivery: !!appointmentDelivery, carrierRisk: !!carrierRisk,
-        ownersRisk: !!ownersRisk, mallDelivery: !!mallDelivery,
+        appointmentDelivery: !!appointmentDelivery,
+        carrierRisk: !!carrierRisk,
+        ownersRisk: !!ownersRisk,
+        mallDelivery: !!mallDelivery,
         actualWeight: actualWeight ? parseFloat(actualWeight) : null,
-        itemDescription, packages: packages ? parseInt(packages) : null,
-        packagesType: packagesType || 'BAGS',
-        unitWeight: unitWeight ? parseFloat(unitWeight) : null,
-        dimensionL: dimensionL ? parseFloat(dimensionL) : null,
-        dimensionW: dimensionW ? parseFloat(dimensionW) : null,
-        dimensionH: dimensionH ? parseFloat(dimensionH) : null,
-        dimensionUnit: dimensionUnit || 'CMS',
-        paymentType, codPayeeName: paymentType === 'COD' ? codPayeeName : null,
+        paymentType: paymentType || 'PREPAID',
+        codPayeeName: paymentType === 'COD' ? codPayeeName : null,
         codAmount: codAmount ? parseFloat(codAmount) : null,
         invoiceValue: invoiceValue ? parseFloat(invoiceValue) : null,
         invoiceNo: invoiceNo || null,
@@ -275,12 +294,52 @@ async function createDirectBooking(req, res) {
         ewayBillNo: ewayBillNo || null,
         hsnCode: hsnCode || null,
         quantity: quantity ? parseInt(quantity) : null,
-        notes, status: 'PENDING',
+        promoCode: promoCode || null,
+        notes: notes || null,
+        status: 'PENDING',
       },
     });
 
+    // Create package item rows if provided
+    if (Array.isArray(items) && items.length > 0) {
+      await prisma.orderItem.createMany({
+        data: items
+          .filter(r => r.description || r.packages)
+          .map(r => ({
+            orderId: order.id,
+            description: r.description || null,
+            reference: r.reference || null,
+            packages: r.packages ? parseInt(r.packages) : null,
+            packagesType: r.packagesType || 'BAGS',
+            unitWeight: r.unitWeight ? parseFloat(r.unitWeight) : null,
+            dimensionL: r.dimensionL ? parseFloat(r.dimensionL) : null,
+            dimensionW: r.dimensionW ? parseFloat(r.dimensionW) : null,
+            dimensionH: r.dimensionH ? parseFloat(r.dimensionH) : null,
+            dimensionUnit: r.dimensionUnit || 'CMS',
+          })),
+      });
+    }
+
+    // Create a draft Shipment with partner info from the form
+    if (primaryServiceProvider) {
+      await prisma.shipment.create({
+        data: {
+          orderId: order.id,
+          partnerName: primaryServiceProvider,
+          loginId: requestedBy || null,
+          docketDate: docketDate ? new Date(docketDate) : new Date(),
+          pickupOption: pickupOption || null,
+          billToParty: billToParty || null,
+          materialHold: !!materialHold,
+          waitingPermit: !!waitingPermit,
+          deliveryCode: deliveryCode || null,
+        },
+      });
+    }
+
     return success(res, { order }, 'Direct booking created', 201);
   } catch (e) {
+    if (e.code === 'P2002') return failure(res, 'Consignment number already exists — please use a different one', 409);
     return failure(res, 'Failed to create direct booking', 500, e.message);
   }
 }

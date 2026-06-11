@@ -1,322 +1,663 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../../services/api';
 
-const SERVICE_TYPES = ['SURFACE', 'AIR', 'WATER', 'EXPRESS'];
-const PAYMENT_TYPES = [
-  { value: 'PREPAID', label: 'Prepaid' },
-  { value: 'TO_PAY', label: 'To Pay' },
-  { value: 'TO_BILL', label: 'To Bill' },
-  { value: 'COD', label: 'COD' },
+const INDIAN_STATES = [
+  'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat',
+  'Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh',
+  'Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab',
+  'Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh',
+  'Uttarakhand','West Bengal','Andaman and Nicobar Islands','Chandigarh',
+  'Dadra and Nagar Haveli and Daman and Diu','Delhi','Jammu and Kashmir',
+  'Ladakh','Lakshadweep','Puducherry',
 ];
-const PACKAGE_TYPES = ['PACKAGES', 'BOXES', 'BAGS'];
 
-const emptyAddr = {
-  name: '', pin: '', addressLine1: '', addressLine2: '',
-  city: '', state: '', contactPerson: '', phone: '', email: '',
+const COUNTRY_CODES = [
+  { code: '+91', label: '+91' },{ code: '+1', label: '+1' },
+  { code: '+44', label: '+44' },{ code: '+61', label: '+61' },
+  { code: '+971', label: '+971' },{ code: '+65', label: '+65' },
+  { code: '+60', label: '+60' },{ code: '+66', label: '+66' },
+  { code: '+49', label: '+49' },{ code: '+33', label: '+33' },
+];
+
+const PARTNER_OPTIONS = [
+  { value: 'DELHIVERY', label: 'DELHIVERY LIMITED' },
+  { value: 'DP_WORLD', label: 'DP WORLD EXPRESS LOGISTICS PRIVATE LIMITED' },
+  { value: 'VRL', label: 'VRL LOGISTICS LIMITED' },
+  { value: 'DTDC', label: 'DTDC EXPRESS LIMITED' },
+];
+
+const emptyRow = {
+  description: '', reference: '',
+  packages: '', packagesType: 'BAGS',
+  unitWeight: '', dimensionL: '', dimensionW: '', dimensionH: '', dimensionUnit: 'CMS',
 };
+
+function genConsignmentNo() {
+  return `CLT-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
+}
 
 export default function AdminDirectBooking() {
   const navigate = useNavigate();
-  const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [savedConsignors, setSavedConsignors] = useState([]);
+  const [savedConsignees, setSavedConsignees] = useState([]);
+  const [credentials, setCredentials] = useState({});
 
-  const [consignor, setConsignor] = useState({ ...emptyAddr });
-  const [consignee, setConsignee] = useState({ ...emptyAddr });
-  const [shipment, setShipment] = useState({
-    serviceType: 'SURFACE', paymentType: 'PREPAID', codPayeeName: '', codAmount: '',
-    appointmentDelivery: false, carrierRisk: false, ownersRisk: false, mallDelivery: false,
-    actualWeight: '', itemDescription: '', packages: '', packagesType: 'BAGS',
-    unitWeight: '', dimensionL: '', dimensionW: '', dimensionH: '', dimensionUnit: 'CMS',
-    invoiceValue: '', invoiceNo: '', invoiceDate: '', ewayBillNo: '', hsnCode: '', quantity: '',
+  const [form, setForm] = useState(() => ({
+    // Top section
+    consignmentType: 'OUTBOUND',
+    requestedBy: '',
+    primaryServiceProvider: 'DP_WORLD',
+
+    // Invoice box (a–g)
+    invoiceValue: '',
+    ewayBillNo: '',
+    hsnCode: '',
+    invoiceDate: '',
+    invoiceNo: '',
+    codAmount: '',
+    quantity: '',
+
+    // Consignment #
+    consignmentNo: genConsignmentNo(),
+
+    // Consignor
+    consignorId: '',
+    consignorName: '',
+    consignorPin: '',
+    consignorAddressLine1: '',
+    consignorAddressLine2: '',
+    consignorCity: '',
+    consignorState: '',
+    consignorContactPerson: '',
+    consignorCountryCode: '+91',
+    consignorPhone: '',
+    consignorEmail: '',
+
+    // Consignee
+    consigneeId: '',
+    consigneeName: '',
+    consigneePin: '',
+    consigneeAddressLine1: '',
+    consigneeAddressLine2: '',
+    consigneeCity: '',
+    consigneeState: '',
+    consigneeContactPerson: '',
+    consigneeCountryCode: '+91',
+    consigneePhone: '',
+    consigneeEmail: '',
+
+    // Service
+    serviceType: 'SURFACE',
+    appointmentDelivery: false,
+    carrierRisk: false,
+    mallDelivery: false,
+    ownersRisk: false,
+
+    // Weight
+    actualWeight: '',
+
+    // Package box handled separately via packageRows state
+
+    // Pickup Options
+    pickupOption: 'PICKUP_FROM_CONSIGNOR',
+
+    // Payment Mode
+    paymentType: 'PREPAID',
+
+    // Bill To Party
+    billToParty: '',
+
+    // Docket Date
+    docketDate: new Date().toISOString().split('T')[0],
+    docketTime: '12:00',
+    docketAmPm: 'PM',
+
+    // Checkboxes
+    materialHold: false,
+    waitingPermit: false,
+
+    // Bottom row
+    promoCode: '',
+    codPayeeName: '',
+    deliveryCode: '',
+
+    // Notes
     notes: '',
-  });
+  }));
 
-  const STEPS = ['Consignor', 'Consignee', 'Shipment Details'];
+  const [packageRows, setPackageRows] = useState([{ ...emptyRow }]);
 
-  const handleCr = e => setConsignor(p => ({ ...p, [e.target.name]: e.target.value }));
-  const handleCe = e => setConsignee(p => ({ ...p, [e.target.name]: e.target.value }));
-  const handleSh = e => {
+  // Load saved data
+  useEffect(() => {
+    api.get('/admin/saved-consignors').then(r => setSavedConsignors(r.data.data.consignors || [])).catch(() => {});
+    api.get('/admin/saved-consignees').then(r => setSavedConsignees(r.data.data.consignees || [])).catch(() => {});
+    api.get('/admin/partner-credentials').then(({ data }) => {
+      const map = {};
+      (data.data.credentials || []).forEach(c => { map[c.partner] = c; });
+      setCredentials(map);
+    }).catch(() => {});
+  }, []);
+
+  // Auto-fill requestedBy when partner changes
+  useEffect(() => {
+    const cred = credentials[form.primaryServiceProvider];
+    setForm(prev => ({ ...prev, requestedBy: cred?.loginId || '' }));
+  }, [form.primaryServiceProvider, credentials]);
+
+  const set = (name, value) => setForm(prev => ({ ...prev, [name]: value }));
+  const handleChange = e => {
     const { name, value, type, checked } = e.target;
-    setShipment(p => ({ ...p, [name]: type === 'checkbox' ? checked : value }));
+    set(name, type === 'checkbox' ? checked : value);
   };
 
-  function validate() {
-    if (step === 0 && (!consignor.name || !consignor.city || !consignor.state || !consignor.pin || !consignor.phone))
-      return 'Fill Consignor Name, PIN, City, State, Phone.';
-    if (step === 1 && (!consignee.name || !consignee.city || !consignee.state || !consignee.pin || !consignee.phone))
-      return 'Fill Consignee Name, PIN, City, State, Phone.';
-    if (step === 2) {
-      if (!shipment.actualWeight) return 'Enter actual weight.';
-      if (!shipment.packages) return 'Enter number of packages.';
-      if (!shipment.itemDescription) return 'Enter item description.';
-      if (shipment.paymentType === 'COD' && !shipment.codPayeeName) return 'Enter COD Payee Name.';
+  // Carrier Risk / Owner's Risk are mutually exclusive
+  const handleServiceOption = e => {
+    const { name, checked } = e.target;
+    if (name === 'carrierRisk' && checked) {
+      setForm(prev => ({ ...prev, carrierRisk: true, ownersRisk: false }));
+    } else if (name === 'ownersRisk' && checked) {
+      setForm(prev => ({ ...prev, ownersRisk: true, carrierRisk: false }));
+    } else {
+      set(name, checked);
     }
-    return '';
-  }
+  };
 
-  function next() {
-    const err = validate(); if (err) { setError(err); return; }
-    setError(''); setStep(s => s + 1);
-  }
+  const fillConsignor = id => {
+    const c = savedConsignors.find(x => x.id === id);
+    if (!c) return;
+    setForm(prev => ({
+      ...prev, consignorId: id,
+      consignorName: c.name || '', consignorPin: c.pin || '',
+      consignorAddressLine1: c.addressLine1 || '', consignorAddressLine2: c.addressLine2 || '',
+      consignorCity: c.city || '', consignorState: c.state || '',
+      consignorContactPerson: c.contactPerson || '',
+      consignorCountryCode: c.countryCode || '+91',
+      consignorPhone: c.phone || '', consignorEmail: c.email || '',
+    }));
+  };
 
-  async function submit() {
-    const err = validate(); if (err) { setError(err); return; }
-    setError(''); setLoading(true);
+  const fillConsignee = id => {
+    const c = savedConsignees.find(x => x.id === id);
+    if (!c) return;
+    setForm(prev => ({
+      ...prev, consigneeId: id,
+      consigneeName: c.name || '', consigneePin: c.pin || '',
+      consigneeAddressLine1: c.addressLine1 || '', consigneeAddressLine2: c.addressLine2 || '',
+      consigneeCity: c.city || '', consigneeState: c.state || '',
+      consigneeContactPerson: c.contactPerson || '',
+      consigneeCountryCode: c.countryCode || '+91',
+      consigneePhone: c.phone || '', consigneeEmail: c.email || '',
+    }));
+  };
+
+  const addRow = () => setPackageRows(prev => [...prev, { ...emptyRow }]);
+  const removeRow = idx => setPackageRows(prev => prev.filter((_, i) => i !== idx));
+  const updateRow = (idx, field, value) =>
+    setPackageRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+
+  const handleSubmit = async () => {
+    if (!form.consignorName.trim()) { setError('Consignor name is required'); return; }
+    if (!form.consigneeName.trim()) { setError('Consignee name is required'); return; }
+    if (!form.serviceType) { setError('Service type is required'); return; }
+    if (!form.consignmentNo.trim()) { setError('Consignment # is required'); return; }
+    setError('');
+    setLoading(true);
     try {
+      // Combine docket date + time
+      let docketDate = null;
+      if (form.docketDate) {
+        const [h, m] = (form.docketTime || '12:00').split(':').map(Number);
+        let hours = h;
+        if (form.docketAmPm === 'PM' && hours < 12) hours += 12;
+        if (form.docketAmPm === 'AM' && hours === 12) hours = 0;
+        const d = new Date(form.docketDate);
+        d.setHours(hours, m, 0, 0);
+        docketDate = d.toISOString();
+      }
+
+      const { consignorId, consigneeId, docketTime, docketAmPm, ...rest } = form;
       const res = await api.post('/admin/bookings/direct', {
-        consignorName: consignor.name, consignorPin: consignor.pin,
-        consignorAddressLine1: consignor.addressLine1, consignorAddressLine2: consignor.addressLine2,
-        consignorCity: consignor.city, consignorState: consignor.state,
-        consignorContactPerson: consignor.contactPerson, consignorPhone: consignor.phone, consignorEmail: consignor.email,
-        consigneeName: consignee.name, consigneePin: consignee.pin,
-        consigneeAddressLine1: consignee.addressLine1, consigneeAddressLine2: consignee.addressLine2,
-        consigneeCity: consignee.city, consigneeState: consignee.state,
-        consigneeContactPerson: consignee.contactPerson, consigneePhone: consignee.phone, consigneeEmail: consignee.email,
-        ...shipment,
+        ...rest,
+        docketDate,
+        items: packageRows.filter(r => r.description || r.packages),
       });
       navigate(`/admin/orders/${res.data.data.order.id}`);
     } catch (e) {
-      setError(e.response?.data?.message || 'Failed to create booking');
+      setError(e.response?.data?.message || 'Failed to create booking. Please try again.');
     } finally {
       setLoading(false);
     }
-  }
+  };
+
+  // Shared field label style
+  const lbl = 'block text-xs font-medium text-zinc-500 mb-1';
+  const sectionTitle = 'text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3';
 
   return (
-    <div className="max-w-3xl space-y-5">
+    <div className="max-w-5xl space-y-4 pb-10">
+      {/* Header */}
       <div>
         <Link to="/admin/orders" className="text-sm text-zinc-500 hover:text-zinc-700">← Orders</Link>
-        <h1 className="mt-1 text-xl font-bold text-zinc-900">New Direct Booking</h1>
-        <p className="text-sm text-zinc-500 mt-0.5">Create a consignment directly without a customer account. An app docket number will be generated for tracking.</p>
+        <h1 className="text-xl font-bold text-zinc-900 mt-0.5">New Direct Booking</h1>
       </div>
 
-      {/* Stepper */}
-      <div className="flex items-center">
-        {STEPS.map((label, i) => (
-          <div key={i} className="flex items-center flex-1 last:flex-none">
-            <div className="flex flex-col items-center">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-colors
-                ${i < step ? 'bg-green-500 border-green-500 text-white' : i === step ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-300 text-gray-400'}`}>
-                {i < step ? '✓' : i + 1}
-              </div>
-              <span className={`text-xs mt-1 font-medium ${i === step ? 'text-blue-600' : 'text-gray-400'}`}>{label}</span>
-            </div>
-            {i < STEPS.length - 1 && <div className={`flex-1 h-0.5 mx-2 mb-4 ${i < step ? 'bg-green-400' : 'bg-gray-200'}`} />}
-          </div>
-        ))}
-      </div>
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">{error}</div>
+      )}
 
-      {error && <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>}
-
-      <div className="card p-6">
-        {step === 0 && (
+      {/* ── Section 1: Consignment Type / Requested By / Primary Service Provider ── */}
+      <div className="card p-5">
+        <div className="grid grid-cols-3 gap-4">
           <div>
-            <h2 className="text-base font-semibold text-zinc-800 mb-4">Consignor Details <span className="text-sm font-normal text-zinc-500">(Sender)</span></h2>
-            <AddressForm values={consignor} onChange={handleCr} />
+            <label className={lbl}>Consignment Type *</label>
+            <select name="consignmentType" value={form.consignmentType} onChange={handleChange} className="input text-sm">
+              <option value="OUTBOUND">OUTBOUND</option>
+              <option value="INBOUND">INBOUND</option>
+              <option value="RETURN">RETURN</option>
+            </select>
           </div>
-        )}
-        {step === 1 && (
           <div>
-            <h2 className="text-base font-semibold text-zinc-800 mb-4">Consignee Details <span className="text-sm font-normal text-zinc-500">(Receiver)</span></h2>
-            <AddressForm values={consignee} onChange={handleCe} />
+            <label className={lbl}>Requested By</label>
+            <input type="text" name="requestedBy" value={form.requestedBy} onChange={handleChange}
+              placeholder="Auto-fetched from partner settings" className="input text-sm" />
           </div>
-        )}
-        {step === 2 && (
-          <div className="space-y-5">
-            <h2 className="text-base font-semibold text-zinc-800">Shipment Details</h2>
-
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-2">Service Type</label>
-              <div className="flex gap-3 flex-wrap">
-                {SERVICE_TYPES.map(s => (
-                  <label key={s} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 cursor-pointer text-sm transition-colors
-                    ${shipment.serviceType === s ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium' : 'border-gray-200 text-gray-600'}`}>
-                    <input type="radio" name="serviceType" value={s} checked={shipment.serviceType === s} onChange={handleSh} className="sr-only" />{s}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { name: 'appointmentDelivery', label: 'Appointment Delivery' },
-                { name: 'carrierRisk', label: 'Carrier Risk' },
-                { name: 'ownersRisk', label: "Owner's Risk" },
-                { name: 'mallDelivery', label: 'Mall Delivery' },
-              ].map(opt => (
-                <label key={opt.name} className="flex items-center gap-2 cursor-pointer text-sm text-zinc-600">
-                  <input type="checkbox" name={opt.name} checked={shipment[opt.name]} onChange={handleSh} className="w-4 h-4 rounded" />
-                  {opt.label}
-                </label>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Actual Weight (kg) *</label>
-                <input type="number" name="actualWeight" value={shipment.actualWeight} onChange={handleSh} placeholder="0.00" step="0.01" className="input-field" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">No. of Packages *</label>
-                <input type="number" name="packages" value={shipment.packages} onChange={handleSh} placeholder="1" className="input-field" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Package Type</label>
-                <select name="packagesType" value={shipment.packagesType} onChange={handleSh} className="input-field">
-                  {PACKAGE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-sm font-medium text-zinc-700">Dimensions (L × W × H)</label>
-                <select name="dimensionUnit" value={shipment.dimensionUnit} onChange={handleSh} className="text-sm border border-gray-300 rounded px-2 py-1">
-                  <option value="CMS">CMS</option>
-                  <option value="INCHES">INCHES</option>
-                </select>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <input type="number" name="dimensionL" value={shipment.dimensionL} onChange={handleSh} placeholder="Length" className="input-field" />
-                <input type="number" name="dimensionW" value={shipment.dimensionW} onChange={handleSh} placeholder="Width" className="input-field" />
-                <input type="number" name="dimensionH" value={shipment.dimensionH} onChange={handleSh} placeholder="Height" className="input-field" />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">Item Description *</label>
-              <input type="text" name="itemDescription" value={shipment.itemDescription} onChange={handleSh} placeholder="Contents of shipment" className="input-field" />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-2">Payment Type</label>
-              <div className="grid grid-cols-2 gap-3">
-                {PAYMENT_TYPES.map(pt => (
-                  <label key={pt.value} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 cursor-pointer text-sm transition-colors
-                    ${shipment.paymentType === pt.value ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium' : 'border-gray-200 text-gray-600'}`}>
-                    <input type="radio" name="paymentType" value={pt.value} checked={shipment.paymentType === pt.value} onChange={handleSh} className="sr-only" />
-                    {pt.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {shipment.paymentType === 'COD' && (
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">COD Payee Name *</label>
-                <input type="text" name="codPayeeName" value={shipment.codPayeeName} onChange={handleSh} placeholder="Person to collect payment from" className="input-field" />
-              </div>
-            )}
-
-            {/* Invoice / Commercial Details — exact order */}
-            <div>
-              <p className="text-sm font-semibold text-zinc-700 mb-3 pb-1 border-b border-gray-100">Invoice &amp; Commercial Details</p>
-              <div className="grid grid-cols-2 gap-4">
-                {/* 1. Invoice Value */}
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Invoice Value (₹)</label>
-                  <input type="number" name="invoiceValue" value={shipment.invoiceValue} onChange={handleSh} placeholder="0.00" step="0.01" min="0" className="input-field" />
-                </div>
-                {/* 2. Eway Bill No. */}
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">E-Way Bill No.</label>
-                  <input type="text" name="ewayBillNo" value={shipment.ewayBillNo} onChange={handleSh} placeholder="12-digit number" className="input-field" />
-                </div>
-                {/* 3. HSN Code */}
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">HSN Code</label>
-                  <input type="text" name="hsnCode" value={shipment.hsnCode} onChange={handleSh} placeholder="e.g. 6203" className="input-field" />
-                </div>
-                {/* 4. Invoice Date */}
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Invoice Date</label>
-                  <input type="date" name="invoiceDate" value={shipment.invoiceDate} onChange={handleSh} className="input-field" />
-                </div>
-                {/* 5. Invoice No. */}
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Invoice No.</label>
-                  <input type="text" name="invoiceNo" value={shipment.invoiceNo} onChange={handleSh} placeholder="e.g. INV-2024-001" className="input-field" />
-                </div>
-                {/* 6. COD Amount */}
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">COD Amount (₹)</label>
-                  <input type="number" name="codAmount" value={shipment.codAmount} onChange={handleSh} placeholder="0.00" step="0.01" min="0" className="input-field" />
-                </div>
-                {/* 7. Quantity */}
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Quantity</label>
-                  <input type="number" name="quantity" value={shipment.quantity} onChange={handleSh} placeholder="No. of items" min="1" className="input-field" />
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">Notes</label>
-              <input type="text" name="notes" value={shipment.notes} onChange={handleSh} placeholder="Special instructions" className="input-field" />
-            </div>
+          <div>
+            <label className={lbl}>Primary Service Provider</label>
+            <select name="primaryServiceProvider" value={form.primaryServiceProvider} onChange={handleChange} className="input text-sm">
+              {PARTNER_OPTIONS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
           </div>
-        )}
-
-        <div className="flex justify-between mt-6 pt-4 border-t border-gray-100">
-          <button onClick={() => { setError(''); setStep(s => s - 1); }} disabled={step === 0}
-            className="px-5 py-2 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 disabled:opacity-40 transition-colors">
-            ← Previous
-          </button>
-          {step < STEPS.length - 1 ? (
-            <button onClick={next} className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
-              Next →
-            </button>
-          ) : (
-            <button onClick={submit} disabled={loading} className="px-6 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-60 transition-colors">
-              {loading ? 'Creating…' : 'Create Booking'}
-            </button>
-          )}
         </div>
       </div>
-    </div>
-  );
-}
 
-function AddressForm({ values, onChange }) {
-  return (
-    <div className="grid grid-cols-2 gap-4">
-      <div className="col-span-2">
-        <label className="block text-sm font-medium text-zinc-700 mb-1">Name / Company *</label>
-        <input type="text" name="name" value={values.name} onChange={onChange} placeholder="Full name or company" className="input-field" />
+      {/* ── Section 2: Invoice & Commercial Details (Box) ── */}
+      <div className="card p-5 border-l-4 border-l-blue-400">
+        <p className={sectionTitle}>Invoice &amp; Commercial Details</p>
+        <div className="grid grid-cols-4 gap-3">
+          <div>
+            <label className={lbl}>a. Invoice Value (₹)</label>
+            <input type="number" name="invoiceValue" value={form.invoiceValue} onChange={handleChange}
+              placeholder="0.00" step="0.01" min="0" className="input text-sm" />
+          </div>
+          <div>
+            <label className={lbl}>b. E-Way Bill No.</label>
+            <input type="text" name="ewayBillNo" value={form.ewayBillNo} onChange={handleChange}
+              placeholder="12-digit" className="input text-sm" />
+          </div>
+          <div>
+            <label className={lbl}>c. HSN Code</label>
+            <input type="text" name="hsnCode" value={form.hsnCode} onChange={handleChange}
+              placeholder="e.g. 6203" className="input text-sm" />
+          </div>
+          <div>
+            <label className={lbl}>d. Invoice Date</label>
+            <input type="date" name="invoiceDate" value={form.invoiceDate} onChange={handleChange} className="input text-sm" />
+          </div>
+          <div>
+            <label className={lbl}>e. Invoice No.</label>
+            <input type="text" name="invoiceNo" value={form.invoiceNo} onChange={handleChange}
+              placeholder="INV-001" className="input text-sm" />
+          </div>
+          <div>
+            <label className={lbl}>f. COD Amount (₹)</label>
+            <input type="number" name="codAmount" value={form.codAmount} onChange={handleChange}
+              placeholder="0.00" step="0.01" min="0" className="input text-sm" />
+          </div>
+          <div>
+            <label className={lbl}>g. Quantity</label>
+            <input type="number" name="quantity" value={form.quantity} onChange={handleChange}
+              placeholder="0" min="1" className="input text-sm" />
+          </div>
+        </div>
       </div>
-      <div>
-        <label className="block text-sm font-medium text-zinc-700 mb-1">Contact Person</label>
-        <input type="text" name="contactPerson" value={values.contactPerson} onChange={onChange} placeholder="Authorized person" className="input-field" />
+
+      {/* ── Section 3: Consignment # ── */}
+      <div className="card p-5">
+        <label className={lbl}>Consignment # *</label>
+        <input type="text" name="consignmentNo" value={form.consignmentNo} onChange={handleChange}
+          placeholder="CLT-YYYY-XXXXX" className="input font-mono text-sm sm:w-56" required />
+        <p className="text-xs text-zinc-400 mt-1">Auto-generated — edit if needed</p>
       </div>
-      <div>
-        <label className="block text-sm font-medium text-zinc-700 mb-1">Phone *</label>
-        <input type="tel" name="phone" value={values.phone} onChange={onChange} placeholder="10-digit mobile" className="input-field" />
+
+      {/* ── Section 4: Consignor + Consignee (side by side) ── */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Consignor */}
+        <div className="card p-5 space-y-2.5">
+          <p className={sectionTitle}>Consignor (Sender)</p>
+          <div>
+            <label className={lbl}>Select Saved Consignor</label>
+            <select value={form.consignorId} onChange={e => fillConsignor(e.target.value)} className="input text-sm">
+              <option value="">— Select or fill manually —</option>
+              {savedConsignors.map(c => <option key={c.id} value={c.id}>{c.name}{c.city ? ` — ${c.city}` : ''}</option>)}
+            </select>
+          </div>
+          <hr className="border-zinc-100" />
+          {[
+            { label: 'Consignor', field: 'consignorName', placeholder: 'Name or company' },
+            { label: 'Pin', field: 'consignorPin', placeholder: 'PIN code', maxLen: 6 },
+            { label: 'Line 1', field: 'consignorAddressLine1', placeholder: 'Street, building' },
+            { label: 'Line 2', field: 'consignorAddressLine2', placeholder: 'Landmark (optional)' },
+            { label: 'City', field: 'consignorCity', placeholder: 'City' },
+          ].map(({ label, field, placeholder, maxLen }) => (
+            <div key={field}>
+              <label className={lbl}>{label}</label>
+              <input type="text" name={field} value={form[field]} onChange={handleChange}
+                placeholder={placeholder} maxLength={maxLen} className="input text-sm" />
+            </div>
+          ))}
+          <div>
+            <label className={lbl}>State</label>
+            <select name="consignorState" value={form.consignorState} onChange={handleChange} className="input text-sm">
+              <option value="">Select state</option>
+              {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={lbl}>Contact</label>
+            <input type="text" name="consignorContactPerson" value={form.consignorContactPerson} onChange={handleChange}
+              placeholder="Contact person" className="input text-sm" />
+          </div>
+          <div>
+            <label className={lbl}>Phone</label>
+            <div className="flex gap-1.5">
+              <select name="consignorCountryCode" value={form.consignorCountryCode} onChange={handleChange} className="input text-sm w-20 shrink-0">
+                {COUNTRY_CODES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
+              </select>
+              <input type="tel" name="consignorPhone" value={form.consignorPhone} onChange={handleChange}
+                placeholder="Phone number" className="input text-sm flex-1" />
+            </div>
+          </div>
+          <div>
+            <label className={lbl}>Email</label>
+            <input type="email" name="consignorEmail" value={form.consignorEmail} onChange={handleChange}
+              placeholder="email@example.com" className="input text-sm" />
+          </div>
+        </div>
+
+        {/* Consignee */}
+        <div className="card p-5 space-y-2.5">
+          <p className={sectionTitle}>Consignee (Receiver)</p>
+          <div>
+            <label className={lbl}>Select Saved Consignee</label>
+            <select value={form.consigneeId} onChange={e => fillConsignee(e.target.value)} className="input text-sm">
+              <option value="">— Select or fill manually —</option>
+              {savedConsignees.map(c => <option key={c.id} value={c.id}>{c.name}{c.city ? ` — ${c.city}` : ''}</option>)}
+            </select>
+          </div>
+          <hr className="border-zinc-100" />
+          {[
+            { label: 'Consignee', field: 'consigneeName', placeholder: 'Name or company' },
+            { label: 'Pin', field: 'consigneePin', placeholder: 'PIN code', maxLen: 6 },
+            { label: 'Line 1', field: 'consigneeAddressLine1', placeholder: 'Street, building' },
+            { label: 'Line 2', field: 'consigneeAddressLine2', placeholder: 'Landmark (optional)' },
+            { label: 'City', field: 'consigneeCity', placeholder: 'City' },
+          ].map(({ label, field, placeholder, maxLen }) => (
+            <div key={field}>
+              <label className={lbl}>{label}</label>
+              <input type="text" name={field} value={form[field]} onChange={handleChange}
+                placeholder={placeholder} maxLength={maxLen} className="input text-sm" />
+            </div>
+          ))}
+          <div>
+            <label className={lbl}>State</label>
+            <select name="consigneeState" value={form.consigneeState} onChange={handleChange} className="input text-sm">
+              <option value="">Select state</option>
+              {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={lbl}>Contact</label>
+            <input type="text" name="consigneeContactPerson" value={form.consigneeContactPerson} onChange={handleChange}
+              placeholder="Contact person" className="input text-sm" />
+          </div>
+          <div>
+            <label className={lbl}>Phone</label>
+            <div className="flex gap-1.5">
+              <select name="consigneeCountryCode" value={form.consigneeCountryCode} onChange={handleChange} className="input text-sm w-20 shrink-0">
+                {COUNTRY_CODES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
+              </select>
+              <input type="tel" name="consigneePhone" value={form.consigneePhone} onChange={handleChange}
+                placeholder="Phone number" className="input text-sm flex-1" />
+            </div>
+          </div>
+          <div>
+            <label className={lbl}>Email</label>
+            <input type="email" name="consigneeEmail" value={form.consigneeEmail} onChange={handleChange}
+              placeholder="email@example.com" className="input text-sm" />
+          </div>
+        </div>
       </div>
-      <div className="col-span-2">
-        <label className="block text-sm font-medium text-zinc-700 mb-1">Email</label>
-        <input type="email" name="email" value={values.email} onChange={onChange} placeholder="email@example.com" className="input-field" />
+
+      {/* ── Section 5: Service + Checkboxes ── */}
+      <div className="card p-5 space-y-4">
+        <div>
+          <label className={lbl}>Service *</label>
+          <select name="serviceType" value={form.serviceType} onChange={handleChange} className="input text-sm sm:w-48">
+            <option value="SURFACE">SURFACE</option>
+            <option value="AIR">AIR</option>
+            <option value="WATER">WATER</option>
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-2.5">
+          {[
+            { name: 'appointmentDelivery', label: 'a. Appointment Delivery' },
+            { name: 'carrierRisk', label: 'b. Carrier Risk' },
+            { name: 'mallDelivery', label: 'c. Mall Delivery' },
+            { name: 'ownersRisk', label: "d. Owner's Risk" },
+          ].map(opt => (
+            <label key={opt.name} className="flex items-center gap-2 cursor-pointer select-none text-sm text-zinc-700">
+              <input type="checkbox" name={opt.name} checked={!!form[opt.name]} onChange={handleServiceOption}
+                className="w-4 h-4 rounded border-gray-300 text-blue-600" />
+              {opt.label}
+              {(opt.name === 'carrierRisk' || opt.name === 'ownersRisk') && (
+                <span className="text-xs text-zinc-400 font-normal">(exclusive)</span>
+              )}
+            </label>
+          ))}
+        </div>
       </div>
-      <div className="col-span-2">
-        <label className="block text-sm font-medium text-zinc-700 mb-1">Address Line 1</label>
-        <input type="text" name="addressLine1" value={values.addressLine1} onChange={onChange} placeholder="Street, building" className="input-field" />
+
+      {/* ── Section 6: Actual Weight ── */}
+      <div className="card p-5">
+        <label className={lbl}>Actual Weight</label>
+        <div className="flex gap-2 items-center">
+          <input type="number" name="actualWeight" value={form.actualWeight} onChange={handleChange}
+            placeholder="0.00" step="0.01" min="0" className="input text-sm sm:w-36" />
+          <select disabled className="input text-sm w-20 opacity-60 cursor-not-allowed">
+            <option>Kgs</option>
+          </select>
+        </div>
       </div>
-      <div className="col-span-2">
-        <label className="block text-sm font-medium text-zinc-700 mb-1">Address Line 2</label>
-        <input type="text" name="addressLine2" value={values.addressLine2} onChange={onChange} placeholder="Landmark (optional)" className="input-field" />
+
+      {/* ── Section 7: Package Details (multi-row box) ── */}
+      <div className="card p-5 border-l-4 border-l-green-400">
+        <div className="flex items-center justify-between mb-4">
+          <p className={sectionTitle + ' mb-0'}>Package Details</p>
+          <button type="button" onClick={addRow}
+            className="text-xs font-medium text-blue-600 hover:text-blue-700 px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors">
+            + Add Row
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs min-w-[700px]">
+            <thead>
+              <tr className="border-b border-zinc-100">
+                {['a. Description', 'b. Reference', 'c. Packages', 'd. Unit Weight', 'e. Dimensions (L × W × H)', ''].map(h => (
+                  <th key={h} className="text-left text-zinc-400 font-medium pb-2 pr-3 whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {packageRows.map((row, idx) => (
+                <tr key={idx} className="border-b border-zinc-50">
+                  <td className="py-2 pr-2">
+                    <input type="text" value={row.description} onChange={e => updateRow(idx, 'description', e.target.value)}
+                      placeholder="Contents" className="input text-xs" />
+                  </td>
+                  <td className="py-2 pr-2">
+                    <input type="text" value={row.reference} onChange={e => updateRow(idx, 'reference', e.target.value)}
+                      placeholder="Ref #" className="input text-xs" />
+                  </td>
+                  <td className="py-2 pr-2">
+                    <div className="flex gap-1">
+                      <input type="number" value={row.packages} onChange={e => updateRow(idx, 'packages', e.target.value)}
+                        placeholder="Qty" min="1" className="input text-xs w-14" style={{minWidth:'3.5rem'}} />
+                      <select value={row.packagesType} onChange={e => updateRow(idx, 'packagesType', e.target.value)}
+                        className="input text-xs" style={{minWidth:'5rem'}}>
+                        <option value="BAGS">Bags</option>
+                        <option value="PACKETS">Packets</option>
+                      </select>
+                    </div>
+                  </td>
+                  <td className="py-2 pr-2">
+                    <div className="flex gap-1 items-center">
+                      <input type="number" value={row.unitWeight} onChange={e => updateRow(idx, 'unitWeight', e.target.value)}
+                        placeholder="0.00" step="0.01" min="0" className="input text-xs w-16" style={{minWidth:'4rem'}} />
+                      <span className="text-zinc-400 shrink-0">Kgs</span>
+                    </div>
+                  </td>
+                  <td className="py-2 pr-2">
+                    <div className="flex gap-1 items-center">
+                      <input type="number" value={row.dimensionL} onChange={e => updateRow(idx, 'dimensionL', e.target.value)}
+                        placeholder="L" step="0.1" className="input text-xs w-14" style={{minWidth:'3.5rem'}} />
+                      <span className="text-zinc-300">×</span>
+                      <input type="number" value={row.dimensionW} onChange={e => updateRow(idx, 'dimensionW', e.target.value)}
+                        placeholder="W" step="0.1" className="input text-xs w-14" style={{minWidth:'3.5rem'}} />
+                      <span className="text-zinc-300">×</span>
+                      <input type="number" value={row.dimensionH} onChange={e => updateRow(idx, 'dimensionH', e.target.value)}
+                        placeholder="H" step="0.1" className="input text-xs w-14" style={{minWidth:'3.5rem'}} />
+                      <select value={row.dimensionUnit} onChange={e => updateRow(idx, 'dimensionUnit', e.target.value)}
+                        className="input text-xs" style={{minWidth:'4rem'}}>
+                        <option value="CMS">cms</option>
+                        <option value="INCHES">in</option>
+                      </select>
+                    </div>
+                  </td>
+                  <td className="py-2 text-center">
+                    {packageRows.length > 1 && (
+                      <button type="button" onClick={() => removeRow(idx)}
+                        className="text-red-400 hover:text-red-600 text-lg leading-none w-6 h-6 flex items-center justify-center rounded hover:bg-red-50">
+                        ×
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-      <div>
-        <label className="block text-sm font-medium text-zinc-700 mb-1">City *</label>
-        <input type="text" name="city" value={values.city} onChange={onChange} placeholder="City" className="input-field" />
+
+      {/* ── Section 8: Pickup Options ── */}
+      <div className="card p-5">
+        <p className={sectionTitle}>Pickup Options</p>
+        <div className="space-y-2.5">
+          {[
+            { value: 'PICKUP_FROM_CONSIGNOR', label: 'a. Pickup from consignor location' },
+            { value: 'DROP_AT_BRANCH', label: 'b. Drop off at a pickup branch' },
+          ].map(opt => (
+            <label key={opt.value} className="flex items-center gap-2.5 cursor-pointer select-none text-sm text-zinc-700">
+              <input type="radio" name="pickupOption" value={opt.value} checked={form.pickupOption === opt.value}
+                onChange={handleChange} className="text-blue-600 w-4 h-4" />
+              {opt.label}
+            </label>
+          ))}
+        </div>
       </div>
-      <div>
-        <label className="block text-sm font-medium text-zinc-700 mb-1">State *</label>
-        <input type="text" name="state" value={values.state} onChange={onChange} placeholder="State" className="input-field" />
+
+      {/* ── Section 9: Payment Mode ── */}
+      <div className="card p-5">
+        <p className={sectionTitle}>Payment Mode</p>
+        <div className="space-y-2.5">
+          {[
+            { value: 'PREPAID', label: 'a. Prepaid' },
+            { value: 'TO_PAY', label: 'b. To Pay' },
+            { value: 'TO_BILL', label: 'c. To Bill' },
+          ].map(opt => (
+            <label key={opt.value} className="flex items-center gap-2.5 cursor-pointer select-none text-sm text-zinc-700">
+              <input type="radio" name="paymentType" value={opt.value} checked={form.paymentType === opt.value}
+                onChange={handleChange} className="text-blue-600 w-4 h-4" />
+              {opt.label}
+            </label>
+          ))}
+        </div>
       </div>
-      <div>
-        <label className="block text-sm font-medium text-zinc-700 mb-1">PIN Code *</label>
-        <input type="text" name="pin" value={values.pin} onChange={onChange} placeholder="6-digit PIN" maxLength={6} className="input-field" />
+
+      {/* ── Section 10: Bill To Party ── */}
+      <div className="card p-5">
+        <label className={lbl}>Bill To Party</label>
+        <input type="text" name="billToParty" value={form.billToParty} onChange={handleChange}
+          placeholder="Party name" className="input text-sm sm:w-64" />
+      </div>
+
+      {/* ── Section 11: Docket Date ── */}
+      <div className="card p-5">
+        <label className={lbl}>Docket Date</label>
+        <div className="flex gap-2 items-center flex-wrap">
+          <input type="date" name="docketDate" value={form.docketDate} onChange={handleChange} className="input text-sm w-auto" />
+          <input type="time" name="docketTime" value={form.docketTime} onChange={handleChange} className="input text-sm w-28" />
+          <select name="docketAmPm" value={form.docketAmPm} onChange={handleChange} className="input text-sm w-16">
+            <option>AM</option>
+            <option>PM</option>
+          </select>
+        </div>
+      </div>
+
+      {/* ── Section 12: Material Hold + Waiting for Permits ── */}
+      <div className="card p-5 space-y-3">
+        <label className="flex items-center gap-2.5 cursor-pointer select-none text-sm text-zinc-700">
+          <input type="checkbox" name="materialHold" checked={form.materialHold} onChange={handleChange}
+            className="w-4 h-4 rounded border-gray-300 text-blue-600" />
+          a. Material Hold
+        </label>
+        <div>
+          <label className="flex items-center gap-2.5 cursor-pointer select-none text-sm text-zinc-700">
+            <input type="checkbox" name="waitingPermit" checked={form.waitingPermit} onChange={handleChange}
+              className="w-4 h-4 rounded border-gray-300 text-blue-600" />
+            b. Waiting for Permits
+          </label>
+          <p className="text-xs text-zinc-400 mt-1 ml-6.5">Permit depend on exit and entry states</p>
+        </div>
+      </div>
+
+      {/* ── Section 13: Promo Code / COD Payee Name / Delivery Code ── */}
+      <div className="card p-5">
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className={lbl}>Promo Code</label>
+            <input type="text" name="promoCode" value={form.promoCode} onChange={handleChange}
+              placeholder="Enter promo code" className="input text-sm" />
+          </div>
+          <div>
+            <label className={lbl + ' text-zinc-300'}>COD Payee Name <span className="font-normal normal-case">(when COD selected)</span></label>
+            <input type="text" name="codPayeeName" value={form.codPayeeName} disabled
+              placeholder="COD payee name" className="input text-sm opacity-40 cursor-not-allowed bg-zinc-50" />
+          </div>
+          <div>
+            <label className={lbl}>Delivery Code</label>
+            <input type="text" name="deliveryCode" value={form.deliveryCode} onChange={handleChange}
+              placeholder="OTP / delivery code" className="input text-sm" />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Section 14: Notes ── */}
+      <div className="card p-5">
+        <label className={lbl}>Notes</label>
+        <textarea name="notes" value={form.notes} onChange={handleChange}
+          placeholder="Special instructions or handling notes…"
+          rows={3} className="input text-sm resize-y" />
+      </div>
+
+      {/* ── Submit ── */}
+      <div className="flex justify-end">
+        <button type="button" onClick={handleSubmit} disabled={loading}
+          className="px-8 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-60 transition-colors text-sm">
+          {loading ? 'Creating Booking…' : 'Create Booking'}
+        </button>
       </div>
     </div>
   );

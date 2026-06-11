@@ -10,6 +10,10 @@ const {
   listMISReports, generateMIS, downloadMIS,
   listAdmins, createAdmin, updateAdmin, getDashboardStats,
 } = require('../controllers/admin.controller');
+const {
+  listSavedConsignors, createSavedConsignor, updateSavedConsignor, deleteSavedConsignor,
+  listSavedConsignees, createSavedConsignee, updateSavedConsignee, deleteSavedConsignee,
+} = require('../controllers/settings.controller');
 
 router.use(authenticate, requireRole('ADMIN', 'SUPER_ADMIN'));
 
@@ -30,6 +34,18 @@ router.post('/bookings/direct', createDirectBooking);
 // Partner credentials
 router.get('/partner-credentials', getPartnerCredentials);
 router.put('/partner-credentials/:partner', requireRole('SUPER_ADMIN'), upsertPartnerCredential);
+
+// Saved Consignors
+router.get('/saved-consignors', listSavedConsignors);
+router.post('/saved-consignors', createSavedConsignor);
+router.put('/saved-consignors/:id', updateSavedConsignor);
+router.delete('/saved-consignors/:id', deleteSavedConsignor);
+
+// Saved Consignees
+router.get('/saved-consignees', listSavedConsignees);
+router.post('/saved-consignees', createSavedConsignee);
+router.put('/saved-consignees/:id', updateSavedConsignee);
+router.delete('/saved-consignees/:id', deleteSavedConsignee);
 
 // Customers
 router.get('/customers', listCustomers);
