@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import api from '../../services/api'
 import StatusBadge from '../../components/shared/StatusBadge'
 import { PageLoader } from '../../components/shared/LoadingSpinner'
+import { PackageIcon, TruckIcon, CheckCircleIcon, ClockIcon } from '../../components/shared/Icons'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -28,7 +29,7 @@ export default function Dashboard() {
     <div className="space-y-6 max-w-5xl">
       {/* Welcome */}
       <div className="card p-6 bg-gradient-to-r from-red-600 to-red-700 border-0">
-        <h1 className="text-xl font-bold text-white">Welcome back, {user?.name?.split(' ')[0]}! 👋</h1>
+        <h1 className="text-xl font-bold text-white">Welcome back, {user?.name?.split(' ')[0]}!</h1>
         <p className="mt-1 text-sm text-red-100">{user?.company || 'Your logistics dashboard'}</p>
         <div className="mt-4">
           <Link to="/book" className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 transition">
@@ -42,10 +43,10 @@ export default function Dashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Orders" value={total} icon="📦" />
-        <StatCard label="In Transit" value={inTransit} icon="🚚" color="amber" />
-        <StatCard label="Delivered" value={delivered} icon="✅" color="green" />
-        <StatCard label="Pending" value={pending} icon="🕐" color="zinc" />
+        <StatCard label="Total Orders" value={total} icon={<PackageIcon className="h-5 w-5" />} />
+        <StatCard label="In Transit" value={inTransit} icon={<TruckIcon className="h-5 w-5" />} color="amber" />
+        <StatCard label="Delivered" value={delivered} icon={<CheckCircleIcon className="h-5 w-5" />} color="green" />
+        <StatCard label="Pending" value={pending} icon={<ClockIcon className="h-5 w-5" />} color="zinc" />
       </div>
 
       {/* Recent orders */}
@@ -79,7 +80,7 @@ export default function Dashboard() {
                         {order.clientDocketNo}
                       </Link>
                     </td>
-                    <td className="px-6 py-3 text-zinc-700">{order.commodity}</td>
+                    <td className="px-6 py-3 text-zinc-700">{order.itemDescription || '—'}</td>
                     <td className="px-6 py-3 text-zinc-500">{order.serviceType}</td>
                     <td className="px-6 py-3"><StatusBadge status={order.status} /></td>
                     <td className="px-6 py-3 text-zinc-500">{new Date(order.createdAt).toLocaleDateString('en-IN')}</td>
@@ -103,7 +104,7 @@ function StatCard({ label, value, icon, color = 'red' }) {
   }
   return (
     <div className="card p-5">
-      <div className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-lg ${colors[color]}`}>{icon}</div>
+      <div className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${colors[color]}`}>{icon}</div>
       <p className="mt-3 text-2xl font-bold text-zinc-900">{value}</p>
       <p className="text-sm text-zinc-500">{label}</p>
     </div>

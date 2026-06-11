@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import api from '../../services/api'
 import StatusBadge from '../../components/shared/StatusBadge'
 import { PageLoader } from '../../components/shared/LoadingSpinner'
+import { ClipboardIcon, ClockIcon, TruckIcon, CheckCircleIcon, UsersIcon, ExclamationIcon } from '../../components/shared/Icons'
 
 const PARTNER_COLORS = { DELHIVERY: '#dc2626', DP_WORLD: '#2563eb', VRL: '#16a34a', DTDC: '#d97706', MANUAL: '#71717a' }
 
@@ -30,12 +31,12 @@ export default function AdminDashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <StatCard label="Orders Today" value={stats?.totalToday ?? 0} icon="📋" />
-        <StatCard label="Pending" value={stats?.pending ?? 0} icon="⏳" color="amber" />
-        <StatCard label="In Transit" value={stats?.inTransit ?? 0} icon="🚚" color="blue" />
-        <StatCard label="Delivered Today" value={stats?.deliveredToday ?? 0} icon="✅" color="green" />
-        <StatCard label="Customers" value={stats?.totalCustomers ?? 0} icon="👥" color="purple" />
-        <StatCard label="Unassigned" value={stats?.pending ?? 0} icon="⚠️" color="red" />
+        <StatCard label="Orders Today" value={stats?.totalToday ?? 0} icon={<ClipboardIcon className="h-5 w-5" />} />
+        <StatCard label="Pending" value={stats?.pending ?? 0} icon={<ClockIcon className="h-5 w-5" />} color="amber" />
+        <StatCard label="In Transit" value={stats?.inTransit ?? 0} icon={<TruckIcon className="h-5 w-5" />} color="blue" />
+        <StatCard label="Delivered Today" value={stats?.deliveredToday ?? 0} icon={<CheckCircleIcon className="h-5 w-5" />} color="green" />
+        <StatCard label="Customers" value={stats?.totalCustomers ?? 0} icon={<UsersIcon className="h-5 w-5" />} color="purple" />
+        <StatCard label="Unassigned" value={stats?.pending ?? 0} icon={<ExclamationIcon className="h-5 w-5" />} color="red" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -98,7 +99,7 @@ function StatCard({ label, value, icon, color = 'zinc' }) {
   const colors = { zinc: 'bg-zinc-50 text-zinc-600', red: 'bg-red-50 text-red-600', amber: 'bg-amber-50 text-amber-700', blue: 'bg-blue-50 text-blue-700', green: 'bg-green-50 text-green-700', purple: 'bg-purple-50 text-purple-700' }
   return (
     <div className="card p-4">
-      <div className={`inline-flex h-8 w-8 items-center justify-center rounded-lg text-base ${colors[color]}`}>{icon}</div>
+      <div className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${colors[color]}`}>{icon}</div>
       <p className="mt-2 text-2xl font-bold text-zinc-900">{value}</p>
       <p className="text-xs text-zinc-500">{label}</p>
     </div>

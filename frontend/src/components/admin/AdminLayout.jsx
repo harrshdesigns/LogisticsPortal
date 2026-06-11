@@ -1,15 +1,16 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { DashboardIcon, PackageIcon, UsersIcon, DocumentIcon, ChartBarIcon, KeyIcon, CogIcon } from '../shared/Icons'
 
 const NAV = [
-  { to: '/admin', label: 'Dashboard', icon: '▦', end: true },
-  { to: '/admin/orders', label: 'Orders', icon: '📦' },
-  { to: '/admin/customers', label: 'Customers', icon: '👥' },
-  { to: '/admin/billing', label: 'Billing', icon: '🧾' },
-  { to: '/admin/mis', label: 'MIS Reports', icon: '📊' },
-  { to: '/admin/team', label: 'Team', icon: '🔑', superAdminOnly: true },
-  { to: '/admin/settings', label: 'Settings', icon: '⚙️' },
+  { to: '/admin', label: 'Dashboard', icon: <DashboardIcon className="h-4 w-4" />, end: true },
+  { to: '/admin/orders', label: 'Orders', icon: <PackageIcon className="h-4 w-4" /> },
+  { to: '/admin/customers', label: 'Customers', icon: <UsersIcon className="h-4 w-4" /> },
+  { to: '/admin/billing', label: 'Billing', icon: <DocumentIcon className="h-4 w-4" /> },
+  { to: '/admin/mis', label: 'MIS Reports', icon: <ChartBarIcon className="h-4 w-4" /> },
+  { to: '/admin/team', label: 'Team', icon: <KeyIcon className="h-4 w-4" />, superAdminOnly: true },
+  { to: '/admin/settings', label: 'Settings', icon: <CogIcon className="h-4 w-4" /> },
 ]
 
 export default function AdminLayout() {
@@ -47,7 +48,7 @@ export default function AdminLayout() {
           <NavLink key={to} to={to} end={end}
             className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
             onClick={() => setSidebarOpen(false)}>
-            <span className="text-sm">{icon}</span>
+            {icon}
             {label}
           </NavLink>
         ))}

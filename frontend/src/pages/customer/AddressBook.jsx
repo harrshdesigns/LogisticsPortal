@@ -3,6 +3,7 @@ import api from '../../services/api'
 import { PageLoader } from '../../components/shared/LoadingSpinner'
 import Modal from '../../components/shared/Modal'
 import EmptyState from '../../components/shared/EmptyState'
+import { MapPinIcon } from '../../components/shared/Icons'
 
 const STATES = ['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat','Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal','Delhi','Chandigarh','Jammu & Kashmir','Ladakh','Puducherry']
 
@@ -49,7 +50,7 @@ export default function AddressBook() {
 
       {addresses.length === 0 ? (
         <div className="card">
-          <EmptyState icon="📍" title="No saved addresses" description="Save your frequently used pickup and delivery addresses." action={
+          <EmptyState icon={<MapPinIcon className="h-12 w-12" />} title="No saved addresses" description="Save your frequently used pickup and delivery addresses." action={
             <button onClick={() => setModalOpen(true)} className="btn-primary">Add Address</button>
           } />
         </div>

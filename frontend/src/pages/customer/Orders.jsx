@@ -4,6 +4,7 @@ import api from '../../services/api'
 import StatusBadge from '../../components/shared/StatusBadge'
 import { PageLoader } from '../../components/shared/LoadingSpinner'
 import EmptyState from '../../components/shared/EmptyState'
+import { PackageIcon } from '../../components/shared/Icons'
 
 const STATUSES = ['', 'PENDING', 'ASSIGNED', 'BOOKED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'EXCEPTION', 'CANCELLED']
 
@@ -60,7 +61,7 @@ export default function Orders() {
 
       <div className="card overflow-hidden">
         {loading ? <PageLoader /> : orders.length === 0 ? (
-          <EmptyState icon="📦" title="No orders found" description="Book your first shipment to get started." />
+          <EmptyState icon={<PackageIcon className="h-12 w-12" />} title="No orders found" description="Book your first shipment to get started." />
         ) : (
           <>
             <div className="overflow-x-auto">

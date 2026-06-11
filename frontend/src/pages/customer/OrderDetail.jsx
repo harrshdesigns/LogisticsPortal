@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import api from '../../services/api';
 import StatusBadge from '../../components/shared/StatusBadge';
 import { PageLoader } from '../../components/shared/LoadingSpinner';
+import { PhoneIcon, MailIcon, MapPinIcon } from '../../components/shared/Icons';
 
 export default function OrderDetail() {
   const { docketNo } = useParams();
@@ -49,8 +50,8 @@ export default function OrderDetail() {
             <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">Consignor (Sender)</p>
             <p className="font-semibold text-zinc-900">{order.consignorName || '—'}</p>
             {order.consignorContactPerson && <p className="text-sm text-zinc-600 mt-0.5">Attn: {order.consignorContactPerson}</p>}
-            {order.consignorPhone && <p className="text-sm text-zinc-600 mt-0.5">📞 {order.consignorPhone}</p>}
-            {order.consignorEmail && <p className="text-sm text-zinc-600">✉ {order.consignorEmail}</p>}
+            {order.consignorPhone && <p className="flex items-center gap-1 text-sm text-zinc-600 mt-0.5"><PhoneIcon className="h-3.5 w-3.5 shrink-0" /> {order.consignorPhone}</p>}
+            {order.consignorEmail && <p className="flex items-center gap-1 text-sm text-zinc-600"><MailIcon className="h-3.5 w-3.5 shrink-0" /> {order.consignorEmail}</p>}
             {order.consignorAddressLine1 && <p className="text-sm text-zinc-600 mt-1">{order.consignorAddressLine1}</p>}
             {order.consignorAddressLine2 && <p className="text-sm text-zinc-600">{order.consignorAddressLine2}</p>}
             <p className="text-sm text-zinc-600">{[order.consignorCity, order.consignorState].filter(Boolean).join(', ')}{order.consignorPin ? ` – ${order.consignorPin}` : ''}</p>
@@ -59,8 +60,8 @@ export default function OrderDetail() {
             <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">Consignee (Receiver)</p>
             <p className="font-semibold text-zinc-900">{order.consigneeName || '—'}</p>
             {order.consigneeContactPerson && <p className="text-sm text-zinc-600 mt-0.5">Attn: {order.consigneeContactPerson}</p>}
-            {order.consigneePhone && <p className="text-sm text-zinc-600 mt-0.5">📞 {order.consigneePhone}</p>}
-            {order.consigneeEmail && <p className="text-sm text-zinc-600">✉ {order.consigneeEmail}</p>}
+            {order.consigneePhone && <p className="flex items-center gap-1 text-sm text-zinc-600 mt-0.5"><PhoneIcon className="h-3.5 w-3.5 shrink-0" /> {order.consigneePhone}</p>}
+            {order.consigneeEmail && <p className="flex items-center gap-1 text-sm text-zinc-600"><MailIcon className="h-3.5 w-3.5 shrink-0" /> {order.consigneeEmail}</p>}
             {order.consigneeAddressLine1 && <p className="text-sm text-zinc-600 mt-1">{order.consigneeAddressLine1}</p>}
             {order.consigneeAddressLine2 && <p className="text-sm text-zinc-600">{order.consigneeAddressLine2}</p>}
             <p className="text-sm text-zinc-600">{[order.consigneeCity, order.consigneeState].filter(Boolean).join(', ')}{order.consigneePin ? ` – ${order.consigneePin}` : ''}</p>
@@ -146,7 +147,7 @@ export default function OrderDetail() {
                           {ev.status.replace(/_/g, ' ')}
                         </p>
                         <p className="text-sm text-zinc-600 mt-0.5">{ev.description}</p>
-                        {ev.location && <p className="text-xs text-zinc-400 mt-0.5">📍 {ev.location}</p>}
+                        {ev.location && <p className="flex items-center gap-1 text-xs text-zinc-400 mt-0.5"><MapPinIcon className="h-3 w-3 shrink-0" /> {ev.location}</p>}
                       </div>
                       <time className="text-xs text-zinc-400 shrink-0">
                         {new Date(ev.timestamp).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}

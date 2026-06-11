@@ -56,6 +56,7 @@ async function getAdminOrder(req, res) {
             bookedByAdmin: { select: { id: true, name: true, email: true } },
           },
         },
+        items: true,
       },
     });
     if (!order) return failure(res, 'Order not found', 404);
@@ -110,6 +111,8 @@ async function assignAndBook(req, res) {
       // admin-only fields
       loginId, docketDate, pickupOption, billToParty,
       materialHold, waitingPermit, deliveryCode, notes,
+      // package rows
+      items,
     } = req.body;
 
     const order = await prisma.order.findUnique({ where: { id: req.params.id } });
@@ -211,6 +214,25 @@ async function assignAndBook(req, res) {
         updatedAt: new Date(),
       },
     });
+
+    // Update package items if provided
+    if (Array.isArray(items) && items.length > 0) {
+      await prisma.orderItem.deleteMany({ where: { orderId: order.id } });
+      await prisma.orderItem.createMany({
+        data: items.filter(r => r.description || r.packages).map(r => ({
+          orderId: order.id,
+          description: r.description || null,
+          reference: r.reference || null,
+          packages: r.packages ? parseInt(r.packages) : null,
+          packagesType: r.packagesType || 'BAGS',
+          unitWeight: r.unitWeight ? parseFloat(r.unitWeight) : null,
+          dimensionL: r.dimensionL ? parseFloat(r.dimensionL) : null,
+          dimensionW: r.dimensionW ? parseFloat(r.dimensionW) : null,
+          dimensionH: r.dimensionH ? parseFloat(r.dimensionH) : null,
+          dimensionUnit: r.dimensionUnit || 'CMS',
+        })),
+      });
+    }
 
     await prisma.trackingEvent.create({
       data: {

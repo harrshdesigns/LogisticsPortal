@@ -3,6 +3,7 @@ import api from '../../services/api'
 import StatusBadge from '../../components/shared/StatusBadge'
 import { PageLoader } from '../../components/shared/LoadingSpinner'
 import Modal from '../../components/shared/Modal'
+import { XMarkIcon } from '../../components/shared/Icons'
 
 export default function AdminBilling() {
   const [invoices, setInvoices] = useState([])
@@ -173,7 +174,7 @@ export default function AdminBilling() {
                       </td>
                       <td className="px-2 py-1"><input className="input text-xs py-1.5 w-24" type="number" value={item.amount} onChange={setItem(i,'amount')} placeholder="0" required /></td>
                       <td className="px-2 py-1">
-                        <button type="button" onClick={() => removeItem(i)} className="text-zinc-400 hover:text-red-600 text-xs">✕</button>
+                        <button type="button" onClick={() => removeItem(i)} className="text-zinc-400 hover:text-red-600"><XMarkIcon className="h-3.5 w-3.5" /></button>
                       </td>
                     </tr>
                   ))}

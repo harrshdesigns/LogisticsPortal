@@ -3,13 +3,16 @@ import { useParams, Link } from 'react-router-dom';
 import api from '../../services/api';
 import StatusBadge from '../../components/shared/StatusBadge';
 import { PageLoader } from '../../components/shared/LoadingSpinner';
+import { MapPinIcon, SearchIcon, SendIcon, CheckIcon, XMarkIcon } from '../../components/shared/Icons';
 
 const PARTNERS = ['DELHIVERY', 'DP_WORLD', 'VRL', 'DTDC', 'MANUAL'];
 const ALL_STATUSES = ['PENDING','ASSIGNED','BOOKED','IN_TRANSIT','OUT_FOR_DELIVERY','DELIVERED','EXCEPTION','CANCELLED'];
 const PAYMENT_TYPES = ['PREPAID', 'TO_PAY', 'TO_BILL', 'COD'];
 const SERVICE_TYPES = ['SURFACE', 'AIR', 'WATER', 'EXPRESS'];
-const PACKAGE_TYPES = ['PACKAGES', 'BOXES', 'BAGS'];
+const PACKAGE_TYPES = ['PACKAGES', 'BOXES', 'BAGS', 'PACKETS'];
 const PICKUP_OPTIONS = ['PICKUP_FROM_CONSIGNOR', 'DROP_AT_BRANCH'];
+
+const emptyPkgRow = () => ({ description: '', reference: '', packages: '', packagesType: 'BAGS', unitWeight: '', dimensionL: '', dimensionW: '', dimensionH: '', dimensionUnit: 'CMS' });
 
 export default function AdminOrderDetail() {
   const { id } = useParams();
@@ -18,44 +21,34 @@ export default function AdminOrderDetail() {
   const [credentials, setCredentials] = useState({});
   const [error, setError] = useState('');
 
-  // Booking form
+  const [packageRows, setPackageRows] = useState([emptyPkgRow()]);
+
   const [booking, setBooking] = useState({
     partnerName: 'DELHIVERY',
     loginId: '',
+    partnerDocketNo: '',
     docketDate: new Date().toISOString().split('T')[0],
+    docketTime: '',
+    docketAmPm: 'AM',
     pickupOption: 'PICKUP_FROM_CONSIGNOR',
     billToParty: '',
     materialHold: false,
     waitingPermit: false,
     deliveryCode: '',
-    // Consignor (admin editable — sent to partner)
+    codPayeeName: '',
     consignorName: '', consignorPin: '', consignorAddressLine1: '', consignorAddressLine2: '',
     consignorCity: '', consignorState: '', consignorContactPerson: '', consignorPhone: '', consignorEmail: '',
-    // Consignee (admin editable — sent to partner)
     consigneeName: '', consigneePin: '', consigneeAddressLine1: '', consigneeAddressLine2: '',
     consigneeCity: '', consigneeState: '', consigneeContactPerson: '', consigneePhone: '', consigneeEmail: '',
-    // Shipment
     serviceType: 'SURFACE',
-    paymentType: 'PREPAID',
-    codPayeeName: '',
-    codAmount: '',
-    actualWeight: '',
-    packages: '',
-    packagesType: 'BAGS',
-    unitWeight: '',
-    dimensionL: '', dimensionW: '', dimensionH: '', dimensionUnit: 'CMS',
-    itemDescription: '',
     appointmentDelivery: false,
     carrierRisk: false,
     ownersRisk: false,
     mallDelivery: false,
-    // Invoice / Commercial
-    invoiceValue: '',
-    invoiceNo: '',
-    invoiceDate: '',
-    ewayBillNo: '',
-    hsnCode: '',
-    quantity: '',
+    actualWeight: '',
+    paymentType: 'PREPAID',
+    codAmount: '',
+    invoiceValue: '', invoiceNo: '', invoiceDate: '', ewayBillNo: '', hsnCode: '', quantity: '',
     notes: '',
   });
   const [ratesData, setRatesData] = useState(null);
@@ -63,11 +56,8 @@ export default function AdminOrderDetail() {
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingMsg, setBookingMsg] = useState({ type: '', text: '' });
 
-  // Tracking
   const [trackForm, setTrackForm] = useState({ status: '', description: '', location: '', timestamp: '' });
   const [trackLoading, setTrackLoading] = useState(false);
-
-  // Status
   const [statusValue, setStatusValue] = useState('');
   const [statusLoading, setStatusLoading] = useState(false);
 
@@ -77,13 +67,30 @@ export default function AdminOrderDetail() {
         const o = data.data.order;
         setOrder(o);
         setStatusValue(o.status);
+        setPackageRows(o.items?.length
+          ? o.items.map(item => ({
+              description: item.description || '',
+              reference: item.reference || '',
+              packages: item.packages || '',
+              packagesType: item.packagesType || 'BAGS',
+              unitWeight: item.unitWeight || '',
+              dimensionL: item.dimensionL || '',
+              dimensionW: item.dimensionW || '',
+              dimensionH: item.dimensionH || '',
+              dimensionUnit: item.dimensionUnit || 'CMS',
+            }))
+          : [emptyPkgRow()]
+        );
         setBooking(prev => ({
           ...prev,
           partnerName: o.shipment?.partnerName || 'DELHIVERY',
           loginId: o.shipment?.loginId || '',
+          partnerDocketNo: o.shipment?.partnerDocketNo || '',
           pickupOption: o.shipment?.pickupOption || 'PICKUP_FROM_CONSIGNOR',
           deliveryCode: o.shipment?.deliveryCode || '',
-          // Pre-fill consignor from customer's order (admin can edit)
+          billToParty: o.shipment?.billToParty || o.billToParty || '',
+          materialHold: !!(o.shipment?.materialHold || o.materialHold),
+          waitingPermit: !!(o.shipment?.waitingPermit || o.waitingPermit),
           consignorName: o.consignorName || '',
           consignorPin: o.consignorPin || '',
           consignorAddressLine1: o.consignorAddressLine1 || '',
@@ -93,7 +100,6 @@ export default function AdminOrderDetail() {
           consignorContactPerson: o.consignorContactPerson || '',
           consignorPhone: o.consignorPhone || '',
           consignorEmail: o.consignorEmail || '',
-          // Pre-fill consignee from customer's order (admin can edit)
           consigneeName: o.consigneeName || '',
           consigneePin: o.consigneePin || '',
           consigneeAddressLine1: o.consigneeAddressLine1 || '',
@@ -103,25 +109,15 @@ export default function AdminOrderDetail() {
           consigneeContactPerson: o.consigneeContactPerson || '',
           consigneePhone: o.consigneePhone || '',
           consigneeEmail: o.consigneeEmail || '',
-          // Shipment
           serviceType: o.serviceType || 'SURFACE',
-          paymentType: o.paymentType || 'PREPAID',
-          codPayeeName: o.codPayeeName || '',
-          codAmount: o.codAmount || '',
-          actualWeight: o.actualWeight || '',
-          packages: o.packages || '',
-          packagesType: o.packagesType || 'BAGS',
-          unitWeight: o.unitWeight || '',
-          dimensionL: o.dimensionL || '',
-          dimensionW: o.dimensionW || '',
-          dimensionH: o.dimensionH || '',
-          dimensionUnit: o.dimensionUnit || 'CMS',
-          itemDescription: o.itemDescription || '',
           appointmentDelivery: !!o.appointmentDelivery,
           carrierRisk: !!o.carrierRisk,
           ownersRisk: !!o.ownersRisk,
           mallDelivery: !!o.mallDelivery,
-          // Invoice / Commercial
+          actualWeight: o.actualWeight || '',
+          paymentType: o.paymentType || 'PREPAID',
+          codPayeeName: o.codPayeeName || '',
+          codAmount: o.codAmount || '',
           invoiceValue: o.invoiceValue || '',
           invoiceNo: o.invoiceNo || '',
           invoiceDate: o.invoiceDate ? o.invoiceDate.split('T')[0] : '',
@@ -137,7 +133,6 @@ export default function AdminOrderDetail() {
 
   useEffect(() => { fetchOrder(); }, [fetchOrder]);
 
-  // When partner changes, autofill loginId from credentials
   useEffect(() => {
     api.get('/admin/partner-credentials')
       .then(({ data }) => {
@@ -160,45 +155,56 @@ export default function AdminOrderDetail() {
     setB(name, type === 'checkbox' ? checked : value);
   };
 
+  const handleServiceCheck = (name) => {
+    setBooking(prev => {
+      const next = { ...prev, [name]: !prev[name] };
+      if (name === 'carrierRisk' && next.carrierRisk) next.ownersRisk = false;
+      if (name === 'ownersRisk' && next.ownersRisk) next.carrierRisk = false;
+      return next;
+    });
+  };
+
+  const setPkgRow = (i, k, v) => setPackageRows(rows => rows.map((r, idx) => idx === i ? { ...r, [k]: v } : r));
+  const addPkgRow = () => setPackageRows(rows => [...rows, emptyPkgRow()]);
+  const removePkgRow = (i) => setPackageRows(rows => rows.filter((_, idx) => idx !== i));
+
   const handleCheckRates = async () => {
-    setRatesLoading(true);
-    setRatesData(null);
+    setRatesLoading(true); setRatesData(null);
     try {
       const { data } = await api.post(`/admin/orders/${id}/check-rates`, { partnerName: booking.partnerName });
       setRatesData(data.data.rates);
     } catch (err) {
       setBookingMsg({ type: 'error', text: err.response?.data?.message || 'Failed to fetch rates' });
-    } finally {
-      setRatesLoading(false);
-    }
+    } finally { setRatesLoading(false); }
   };
 
   const handleBook = async () => {
-    setBookingLoading(true);
-    setBookingMsg({ type: '', text: '' });
+    setBookingLoading(true); setBookingMsg({ type: '', text: '' });
     try {
-      await api.post(`/admin/orders/${id}/assign`, booking);
+      let fullDocketDate = booking.docketDate;
+      if (booking.docketTime) {
+        let [hours, minutes] = booking.docketTime.split(':').map(Number);
+        if (booking.docketAmPm === 'PM' && hours !== 12) hours += 12;
+        if (booking.docketAmPm === 'AM' && hours === 12) hours = 0;
+        fullDocketDate = `${booking.docketDate}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+      }
+      await api.post(`/admin/orders/${id}/assign`, { ...booking, docketDate: fullDocketDate, items: packageRows });
       setBookingMsg({ type: 'success', text: 'Shipment booked successfully with partner!' });
       fetchOrder();
     } catch (err) {
       setBookingMsg({ type: 'error', text: err.response?.data?.message || 'Booking failed' });
-    } finally {
-      setBookingLoading(false);
-    }
+    } finally { setBookingLoading(false); }
   };
 
   const handleAddTracking = async e => {
-    e.preventDefault();
-    setTrackLoading(true);
+    e.preventDefault(); setTrackLoading(true);
     try {
       await api.post(`/admin/orders/${id}/tracking`, trackForm);
       setTrackForm({ status: '', description: '', location: '', timestamp: '' });
       fetchOrder();
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to add event');
-    } finally {
-      setTrackLoading(false);
-    }
+    } finally { setTrackLoading(false); }
   };
 
   const handleStatusUpdate = async () => {
@@ -208,9 +214,7 @@ export default function AdminOrderDetail() {
       fetchOrder();
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to update status');
-    } finally {
-      setStatusLoading(false);
-    }
+    } finally { setStatusLoading(false); }
   };
 
   if (loading) return <PageLoader />;
@@ -222,6 +226,7 @@ export default function AdminOrderDetail() {
   );
 
   const events = order.shipment?.trackingEvents || [];
+  const isBooked = !!order.shipment?.bookedAt;
 
   return (
     <div className="max-w-7xl space-y-5">
@@ -246,7 +251,6 @@ export default function AdminOrderDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
         {/* ── LEFT: Order Info ── */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Customer */}
           {order.user && (
             <div className="card p-4">
               <p className="text-xs font-semibold text-zinc-400 uppercase mb-2">Customer</p>
@@ -257,7 +261,6 @@ export default function AdminOrderDetail() {
             </div>
           )}
 
-          {/* Consignor */}
           <div className="card p-4">
             <p className="text-xs font-semibold text-zinc-400 uppercase mb-2">Consignor (Sender)</p>
             <p className="font-medium text-sm text-zinc-900">{order.consignorName}</p>
@@ -269,7 +272,6 @@ export default function AdminOrderDetail() {
             </p>
           </div>
 
-          {/* Consignee */}
           <div className="card p-4">
             <p className="text-xs font-semibold text-zinc-400 uppercase mb-2">Consignee (Receiver)</p>
             <p className="font-medium text-sm text-zinc-900">{order.consigneeName}</p>
@@ -281,7 +283,6 @@ export default function AdminOrderDetail() {
             </p>
           </div>
 
-          {/* Shipment Summary */}
           <div className="card p-4">
             <p className="text-xs font-semibold text-zinc-400 uppercase mb-2">Shipment Summary</p>
             <dl className="space-y-1 text-sm">
@@ -289,16 +290,9 @@ export default function AdminOrderDetail() {
                 ['Service', order.serviceType],
                 ['Payment', order.paymentType?.replace(/_/g, ' ')],
                 ['Weight', order.actualWeight ? `${order.actualWeight} kg` : null],
-                ['Packages', order.packages ? `${order.packages} ${order.packagesType || ''}` : null],
-                ['Dimensions', order.dimensionL ? `${order.dimensionL}×${order.dimensionW}×${order.dimensionH} ${order.dimensionUnit}` : null],
-                ['Item', order.itemDescription],
-                // 7 new fields in exact specified order:
                 ['Invoice Value', order.invoiceValue ? `₹${Number(order.invoiceValue).toLocaleString('en-IN')}` : null],
-                ['E-Way Bill No.', order.ewayBillNo || null],
-                ['HSN Code', order.hsnCode || null],
-                ['Invoice Date', order.invoiceDate ? new Date(order.invoiceDate).toLocaleDateString('en-IN') : null],
+                ['E-Way Bill', order.ewayBillNo || null],
                 ['Invoice No.', order.invoiceNo || null],
-                ['COD Amount', order.codAmount ? `₹${Number(order.codAmount).toLocaleString('en-IN')}` : null],
                 ['Quantity', order.quantity || null],
               ].filter(([,v]) => v).map(([k, v]) => (
                 <div key={k} className="flex justify-between">
@@ -317,7 +311,6 @@ export default function AdminOrderDetail() {
             )}
           </div>
 
-          {/* Tracking Timeline */}
           <div className="card p-4">
             <p className="text-xs font-semibold text-zinc-400 uppercase mb-3">Tracking Timeline</p>
             {events.length === 0 ? (
@@ -335,7 +328,11 @@ export default function AdminOrderDetail() {
                         <div>
                           <p className="text-xs font-semibold text-zinc-800">{ev.status.replace(/_/g, ' ')}</p>
                           <p className="text-xs text-zinc-500">{ev.description}</p>
-                          {ev.location && <p className="text-xs text-zinc-400">📍 {ev.location}</p>}
+                          {ev.location && (
+                            <p className="flex items-center gap-1 text-xs text-zinc-400">
+                              <MapPinIcon className="h-3 w-3 shrink-0" /> {ev.location}
+                            </p>
+                          )}
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-xs text-zinc-400">{new Date(ev.timestamp).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
@@ -347,8 +344,6 @@ export default function AdminOrderDetail() {
                 ))}
               </div>
             )}
-
-            {/* Add Tracking Event */}
             <div className="mt-3 pt-3 border-t border-zinc-100">
               <p className="text-xs font-semibold text-zinc-600 mb-2">Add Manual Update</p>
               <form onSubmit={handleAddTracking} className="space-y-2">
@@ -377,9 +372,9 @@ export default function AdminOrderDetail() {
           <div className="card p-5 space-y-5">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-zinc-800">Assign & Book with Partner</h3>
-              {order.shipment?.bookedAt && (
-                <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">
-                  ✓ Booked via {order.shipment.partnerName?.replace('_', ' ')}
+              {isBooked && (
+                <span className="inline-flex items-center gap-1.5 text-xs bg-green-100 text-green-700 px-2.5 py-1 rounded-full font-medium">
+                  <CheckIcon className="h-3.5 w-3.5" /> Booked via {order.shipment.partnerName?.replace('_', ' ')}
                 </span>
               )}
             </div>
@@ -408,26 +403,251 @@ export default function AdminOrderDetail() {
               </div>
             </div>
 
-            {/* Docket Date + Pickup Option */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Docket Date</label>
-                <input type="date" name="docketDate" value={booking.docketDate} onChange={handleBookingChange} className="input text-sm" />
+            <hr className="border-zinc-100" />
+
+            {/* Invoice & Commercial Details */}
+            <div className="border-l-4 border-blue-400 pl-4">
+              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Invoice &amp; Commercial Details</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">a. Invoice Value (₹)</label>
+                  <input type="number" name="invoiceValue" value={booking.invoiceValue} onChange={handleBookingChange}
+                    placeholder="0.00" step="0.01" min="0" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">b. E-Way Bill No.</label>
+                  <input type="text" name="ewayBillNo" value={booking.ewayBillNo} onChange={handleBookingChange}
+                    placeholder="12-digit number" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">c. HSN Code</label>
+                  <input type="text" name="hsnCode" value={booking.hsnCode} onChange={handleBookingChange}
+                    placeholder="e.g. 6203" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">d. Invoice Date</label>
+                  <input type="date" name="invoiceDate" value={booking.invoiceDate} onChange={handleBookingChange} className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">e. Invoice No.</label>
+                  <input type="text" name="invoiceNo" value={booking.invoiceNo} onChange={handleBookingChange}
+                    placeholder="e.g. INV-2024-001" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">f. COD Amount (₹)</label>
+                  <input type="number" name="codAmount" value={booking.codAmount} onChange={handleBookingChange}
+                    placeholder="0.00" step="0.01" min="0" className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">g. Quantity</label>
+                  <input type="number" name="quantity" value={booking.quantity} onChange={handleBookingChange}
+                    placeholder="No. of items" min="1" className="input text-sm" />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Pickup Option</label>
-                <select name="pickupOption" value={booking.pickupOption} onChange={handleBookingChange} className="input text-sm">
-                  {PICKUP_OPTIONS.map(o => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
+            </div>
+
+            {/* Partner Docket # */}
+            <div>
+              <label className="block text-xs font-medium text-zinc-600 mb-1">Partner Docket #</label>
+              <input type="text" name="partnerDocketNo" value={booking.partnerDocketNo} readOnly
+                placeholder="Auto-generated by partner on booking"
+                className="input text-sm font-mono bg-zinc-50 cursor-default" />
+              {isBooked && <p className="text-xs text-zinc-400 mt-1">Assigned by partner API on booking</p>}
+            </div>
+
+            {/* Consignor + Consignee side by side */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Consignor
+                  <span className="ml-1 normal-case text-blue-500 font-normal text-xs">(pre-filled, edit if needed)</span>
+                </p>
+                {[
+                  ['consignorName', 'Name / Company', 'text', 'Consignor name'],
+                  ['consignorPin', 'PIN', 'text', 'PIN code'],
+                  ['consignorAddressLine1', 'Address 1', 'text', 'Street, building'],
+                  ['consignorAddressLine2', 'Address 2', 'text', 'Landmark (optional)'],
+                  ['consignorCity', 'City', 'text', 'City'],
+                  ['consignorState', 'State', 'text', 'State'],
+                  ['consignorContactPerson', 'Contact Person', 'text', 'Authorized person'],
+                  ['consignorPhone', 'Phone', 'text', 'Phone'],
+                  ['consignorEmail', 'Email', 'email', 'Email'],
+                ].map(([name, label, type, ph]) => (
+                  <div key={name}>
+                    <label className="block text-xs font-medium text-zinc-600 mb-0.5">{label}</label>
+                    <input type={type} name={name} value={booking[name]} onChange={handleBookingChange} placeholder={ph} className="input text-xs" />
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Consignee
+                  <span className="ml-1 normal-case text-blue-500 font-normal text-xs">(pre-filled, edit if needed)</span>
+                </p>
+                {[
+                  ['consigneeName', 'Name / Company', 'text', 'Consignee name'],
+                  ['consigneePin', 'PIN', 'text', 'PIN code'],
+                  ['consigneeAddressLine1', 'Address 1', 'text', 'Street, building'],
+                  ['consigneeAddressLine2', 'Address 2', 'text', 'Landmark (optional)'],
+                  ['consigneeCity', 'City', 'text', 'City'],
+                  ['consigneeState', 'State', 'text', 'State'],
+                  ['consigneeContactPerson', 'Contact Person', 'text', 'Authorized person'],
+                  ['consigneePhone', 'Phone', 'text', 'Phone'],
+                  ['consigneeEmail', 'Email', 'email', 'Email'],
+                ].map(([name, label, type, ph]) => (
+                  <div key={name}>
+                    <label className="block text-xs font-medium text-zinc-600 mb-0.5">{label}</label>
+                    <input type={type} name={name} value={booking[name]} onChange={handleBookingChange} placeholder={ph} className="input text-xs" />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Service + Checkboxes */}
+            <div>
+              <label className="block text-xs font-medium text-zinc-600 mb-1">Service</label>
+              <select name="serviceType" value={booking.serviceType} onChange={handleBookingChange} className="input text-sm mb-3">
+                {SERVICE_TYPES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  ['appointmentDelivery', 'Appointment Delivery'],
+                  ['carrierRisk', 'Carrier Risk'],
+                  ['ownersRisk', "Owner's Risk"],
+                  ['mallDelivery', 'Mall Delivery'],
+                ].map(([name, label]) => (
+                  <label key={name} className="flex items-center gap-2 cursor-pointer text-sm text-zinc-600">
+                    <input type="checkbox" checked={booking[name]} onChange={() => handleServiceCheck(name)} className="w-4 h-4 rounded border-zinc-300 accent-red-600" />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Actual Weight */}
+            <div>
+              <label className="block text-xs font-medium text-zinc-600 mb-1">Actual Weight (kg)</label>
+              <input type="number" name="actualWeight" value={booking.actualWeight} onChange={handleBookingChange}
+                placeholder="0.00" step="0.01" min="0" className="input text-sm w-40" />
+            </div>
+
+            {/* Package Rows */}
+            <div className="border-l-4 border-green-400 pl-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Package Details</p>
+                <button type="button" onClick={addPkgRow}
+                  className="text-xs font-medium text-green-600 hover:text-green-700 border border-green-300 rounded px-2 py-0.5 hover:bg-green-50">
+                  + Add Row
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-100">
+                      {['Description', 'Ref', 'Pkgs', 'Type', 'Wt(kg)', 'L', 'W', 'H', 'Unit', ''].map(h => (
+                        <th key={h} className="pb-1.5 text-left font-medium text-zinc-400 pr-1.5 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {packageRows.map((row, i) => (
+                      <tr key={i} className="border-b border-zinc-50">
+                        <td className="pr-1.5 py-1"><input value={row.description} onChange={e => setPkgRow(i, 'description', e.target.value)} placeholder="Contents" className="input text-xs w-24" /></td>
+                        <td className="pr-1.5 py-1"><input value={row.reference} onChange={e => setPkgRow(i, 'reference', e.target.value)} placeholder="Ref" className="input text-xs w-16" /></td>
+                        <td className="pr-1.5 py-1"><input type="number" value={row.packages} onChange={e => setPkgRow(i, 'packages', e.target.value)} placeholder="1" min="1" className="input text-xs w-10" /></td>
+                        <td className="pr-1.5 py-1">
+                          <select value={row.packagesType} onChange={e => setPkgRow(i, 'packagesType', e.target.value)} className="input text-xs w-20">
+                            {PACKAGE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                        </td>
+                        <td className="pr-1.5 py-1"><input type="number" value={row.unitWeight} onChange={e => setPkgRow(i, 'unitWeight', e.target.value)} placeholder="0.0" step="0.01" className="input text-xs w-14" /></td>
+                        <td className="pr-1.5 py-1"><input type="number" value={row.dimensionL} onChange={e => setPkgRow(i, 'dimensionL', e.target.value)} placeholder="L" step="0.1" className="input text-xs w-12" /></td>
+                        <td className="pr-1.5 py-1"><input type="number" value={row.dimensionW} onChange={e => setPkgRow(i, 'dimensionW', e.target.value)} placeholder="W" step="0.1" className="input text-xs w-12" /></td>
+                        <td className="pr-1.5 py-1"><input type="number" value={row.dimensionH} onChange={e => setPkgRow(i, 'dimensionH', e.target.value)} placeholder="H" step="0.1" className="input text-xs w-12" /></td>
+                        <td className="pr-1.5 py-1">
+                          <select value={row.dimensionUnit} onChange={e => setPkgRow(i, 'dimensionUnit', e.target.value)} className="input text-xs w-14">
+                            <option value="CMS">CM</option>
+                            <option value="INCHES">IN</option>
+                          </select>
+                        </td>
+                        <td className="py-1">
+                          {packageRows.length > 1 && (
+                            <button type="button" onClick={() => removePkgRow(i)} className="text-zinc-300 hover:text-red-500 transition-colors">
+                              <XMarkIcon className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Pickup Options */}
+            <div>
+              <p className="text-xs font-semibold text-zinc-600 mb-2">Pickup Options</p>
+              <div className="flex gap-6">
+                {PICKUP_OPTIONS.map(opt => (
+                  <label key={opt} className="flex items-center gap-2 cursor-pointer text-sm text-zinc-600">
+                    <input type="radio" name="pickupOption" value={opt} checked={booking.pickupOption === opt}
+                      onChange={handleBookingChange} className="accent-red-600" />
+                    {opt.replace(/_/g, ' ')}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Payment Mode */}
+            <div>
+              <p className="text-xs font-semibold text-zinc-600 mb-2">Payment Mode</p>
+              <div className="flex flex-wrap gap-4">
+                {PAYMENT_TYPES.map(pt => (
+                  <label key={pt} className="flex items-center gap-2 cursor-pointer text-sm text-zinc-600">
+                    <input type="radio" name="paymentType" value={pt} checked={booking.paymentType === pt}
+                      onChange={handleBookingChange} className="accent-red-600" />
+                    {pt.replace(/_/g, ' ')}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Bill To Party */}
+            <div>
+              <label className="block text-xs font-medium text-zinc-600 mb-1">Bill To Party</label>
+              <input type="text" name="billToParty" value={booking.billToParty} onChange={handleBookingChange}
+                placeholder="Billing party name" className="input text-sm" />
+            </div>
+
+            {/* Docket Date + Time + AM/PM */}
+            <div>
+              <label className="block text-xs font-medium text-zinc-600 mb-1">Docket Date</label>
+              <div className="flex gap-2">
+                <input type="date" name="docketDate" value={booking.docketDate} onChange={handleBookingChange} className="input text-sm flex-1" />
+                <input type="time" name="docketTime" value={booking.docketTime} onChange={handleBookingChange} className="input text-sm w-28" />
+                <select name="docketAmPm" value={booking.docketAmPm} onChange={handleBookingChange} className="input text-sm w-20">
+                  <option value="AM">AM</option>
+                  <option value="PM">PM</option>
                 </select>
               </div>
             </div>
 
-            {/* Bill to Party + Delivery Code */}
+            {/* Material Hold + Waiting Permits */}
+            <div className="flex gap-6">
+              <label className="flex items-center gap-2 cursor-pointer text-sm text-zinc-600">
+                <input type="checkbox" name="materialHold" checked={booking.materialHold} onChange={handleBookingChange} className="w-4 h-4 rounded accent-red-600" />
+                Material Hold
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer text-sm text-zinc-600">
+                <input type="checkbox" name="waitingPermit" checked={booking.waitingPermit} onChange={handleBookingChange} className="w-4 h-4 rounded accent-red-600" />
+                Waiting for Permits
+              </label>
+            </div>
+
+            {/* COD Payee + Delivery Code */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Bill To Party</label>
-                <input type="text" name="billToParty" value={booking.billToParty} onChange={handleBookingChange}
-                  placeholder="Billing party name" className="input text-sm" />
+                <label className="block text-xs font-medium text-zinc-400 mb-1">COD Payee Name</label>
+                <input type="text" name="codPayeeName" value={booking.codPayeeName}
+                  placeholder="Linked to COD payment" className="input text-sm opacity-40 cursor-not-allowed" disabled />
               </div>
               <div>
                 <label className="block text-xs font-medium text-zinc-600 mb-1">Delivery Code</label>
@@ -436,269 +656,11 @@ export default function AdminOrderDetail() {
               </div>
             </div>
 
-            {/* Flags */}
-            <div className="flex gap-6">
-              <label className="flex items-center gap-2 cursor-pointer text-sm text-zinc-600">
-                <input type="checkbox" name="materialHold" checked={booking.materialHold} onChange={handleBookingChange} className="w-4 h-4 rounded" />
-                Material Hold
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer text-sm text-zinc-600">
-                <input type="checkbox" name="waitingPermit" checked={booking.waitingPermit} onChange={handleBookingChange} className="w-4 h-4 rounded" />
-                Waiting Permit
-              </label>
-            </div>
-
-            <hr className="border-zinc-100" />
-
-            {/* Consignor Details — admin editable, sent to partner */}
-            <div>
-              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">
-                Consignor Details
-                <span className="ml-2 normal-case text-blue-600 font-normal">(pre-filled from customer order — edit if needed)</span>
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">Name / Company</label>
-                  <input type="text" name="consignorName" value={booking.consignorName} onChange={handleBookingChange} placeholder="Consignor name" className="input text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">Contact Person</label>
-                  <input type="text" name="consignorContactPerson" value={booking.consignorContactPerson} onChange={handleBookingChange} placeholder="Authorized person" className="input text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">Phone</label>
-                  <input type="text" name="consignorPhone" value={booking.consignorPhone} onChange={handleBookingChange} placeholder="Phone" className="input text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">Email</label>
-                  <input type="email" name="consignorEmail" value={booking.consignorEmail} onChange={handleBookingChange} placeholder="Email" className="input text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">PIN Code</label>
-                  <input type="text" name="consignorPin" value={booking.consignorPin} onChange={handleBookingChange} placeholder="PIN" className="input text-sm" />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">Address Line 1</label>
-                  <input type="text" name="consignorAddressLine1" value={booking.consignorAddressLine1} onChange={handleBookingChange} placeholder="Street, building" className="input text-sm" />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">Address Line 2</label>
-                  <input type="text" name="consignorAddressLine2" value={booking.consignorAddressLine2} onChange={handleBookingChange} placeholder="Landmark (optional)" className="input text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">City</label>
-                  <input type="text" name="consignorCity" value={booking.consignorCity} onChange={handleBookingChange} placeholder="City" className="input text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">State</label>
-                  <input type="text" name="consignorState" value={booking.consignorState} onChange={handleBookingChange} placeholder="State" className="input text-sm" />
-                </div>
-              </div>
-            </div>
-
-            <hr className="border-zinc-100" />
-
-            {/* Consignee Details — admin editable, sent to partner */}
-            <div>
-              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">
-                Consignee Details
-                <span className="ml-2 normal-case text-blue-600 font-normal">(pre-filled from customer order — edit if needed)</span>
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">Name / Company</label>
-                  <input type="text" name="consigneeName" value={booking.consigneeName} onChange={handleBookingChange} placeholder="Consignee name" className="input text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">Contact Person</label>
-                  <input type="text" name="consigneeContactPerson" value={booking.consigneeContactPerson} onChange={handleBookingChange} placeholder="Authorized person" className="input text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">Phone</label>
-                  <input type="text" name="consigneePhone" value={booking.consigneePhone} onChange={handleBookingChange} placeholder="Phone" className="input text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">Email</label>
-                  <input type="email" name="consigneeEmail" value={booking.consigneeEmail} onChange={handleBookingChange} placeholder="Email" className="input text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">PIN Code</label>
-                  <input type="text" name="consigneePin" value={booking.consigneePin} onChange={handleBookingChange} placeholder="PIN" className="input text-sm" />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">Address Line 1</label>
-                  <input type="text" name="consigneeAddressLine1" value={booking.consigneeAddressLine1} onChange={handleBookingChange} placeholder="Street, building" className="input text-sm" />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">Address Line 2</label>
-                  <input type="text" name="consigneeAddressLine2" value={booking.consigneeAddressLine2} onChange={handleBookingChange} placeholder="Landmark (optional)" className="input text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">City</label>
-                  <input type="text" name="consigneeCity" value={booking.consigneeCity} onChange={handleBookingChange} placeholder="City" className="input text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">State</label>
-                  <input type="text" name="consigneeState" value={booking.consigneeState} onChange={handleBookingChange} placeholder="State" className="input text-sm" />
-                </div>
-              </div>
-            </div>
-
-            <hr className="border-zinc-100" />
-
-            {/* Service & Payment */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Service Type</label>
-                <select name="serviceType" value={booking.serviceType} onChange={handleBookingChange} className="input text-sm">
-                  {SERVICE_TYPES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Payment Type</label>
-                <select name="paymentType" value={booking.paymentType} onChange={handleBookingChange} className="input text-sm">
-                  {PAYMENT_TYPES.map(p => <option key={p} value={p}>{p.replace(/_/g, ' ')}</option>)}
-                </select>
-              </div>
-            </div>
-
-            {booking.paymentType === 'COD' && (
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">COD Payee Name</label>
-                <input type="text" name="codPayeeName" value={booking.codPayeeName} onChange={handleBookingChange}
-                  placeholder="Person to collect COD from" className="input text-sm" />
-              </div>
-            )}
-
-            {/* Weight & Packages */}
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Actual Wt (kg)</label>
-                <input type="number" name="actualWeight" value={booking.actualWeight} onChange={handleBookingChange}
-                  placeholder="0.00" step="0.01" min="0" className="input text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">No. of Pkgs</label>
-                <input type="number" name="packages" value={booking.packages} onChange={handleBookingChange}
-                  placeholder="1" min="1" className="input text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Pkg Type</label>
-                <select name="packagesType" value={booking.packagesType} onChange={handleBookingChange} className="input text-sm">
-                  {PACKAGE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-            </div>
-
-            {/* Unit Weight + Dimensions */}
-            <div className="grid grid-cols-4 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Unit Wt (kg)</label>
-                <input type="number" name="unitWeight" value={booking.unitWeight} onChange={handleBookingChange}
-                  placeholder="0.00" step="0.01" min="0" className="input text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">L</label>
-                <input type="number" name="dimensionL" value={booking.dimensionL} onChange={handleBookingChange}
-                  placeholder="L" step="0.1" className="input text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">W</label>
-                <input type="number" name="dimensionW" value={booking.dimensionW} onChange={handleBookingChange}
-                  placeholder="W" step="0.1" className="input text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">H</label>
-                <input type="number" name="dimensionH" value={booking.dimensionH} onChange={handleBookingChange}
-                  placeholder="H" step="0.1" className="input text-sm" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 items-end">
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Dimension Unit</label>
-                <select name="dimensionUnit" value={booking.dimensionUnit} onChange={handleBookingChange} className="input text-sm">
-                  <option value="CMS">CMS</option>
-                  <option value="INCHES">INCHES</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Item Description */}
-            <div>
-              <label className="block text-xs font-medium text-zinc-600 mb-1">Item Description</label>
-              <input type="text" name="itemDescription" value={booking.itemDescription} onChange={handleBookingChange}
-                placeholder="Contents of shipment" className="input text-sm" />
-            </div>
-
-            {/* Delivery Options */}
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { name: 'appointmentDelivery', label: 'Appointment Delivery' },
-                { name: 'carrierRisk', label: 'Carrier Risk' },
-                { name: 'ownersRisk', label: "Owner's Risk" },
-                { name: 'mallDelivery', label: 'Mall Delivery' },
-              ].map(opt => (
-                <label key={opt.name} className="flex items-center gap-2 cursor-pointer text-sm text-zinc-600">
-                  <input type="checkbox" name={opt.name} checked={booking[opt.name]} onChange={handleBookingChange} className="w-4 h-4 rounded border-gray-300" />
-                  {opt.label}
-                </label>
-              ))}
-            </div>
-
-            {/* Invoice / Commercial Details — exact order */}
-            <div>
-              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Invoice &amp; Commercial Details</p>
-              <div className="grid grid-cols-2 gap-3">
-                {/* 1. Invoice Value */}
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">Invoice Value (₹)</label>
-                  <input type="number" name="invoiceValue" value={booking.invoiceValue} onChange={handleBookingChange}
-                    placeholder="0.00" step="0.01" min="0" className="input text-sm" />
-                </div>
-                {/* 2. Eway Bill No. */}
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">E-Way Bill No.</label>
-                  <input type="text" name="ewayBillNo" value={booking.ewayBillNo} onChange={handleBookingChange}
-                    placeholder="12-digit number" className="input text-sm" />
-                </div>
-                {/* 3. HSN Code */}
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">HSN Code</label>
-                  <input type="text" name="hsnCode" value={booking.hsnCode} onChange={handleBookingChange}
-                    placeholder="e.g. 6203" className="input text-sm" />
-                </div>
-                {/* 4. Invoice Date */}
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">Invoice Date</label>
-                  <input type="date" name="invoiceDate" value={booking.invoiceDate} onChange={handleBookingChange} className="input text-sm" />
-                </div>
-                {/* 5. Invoice No. */}
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">Invoice No.</label>
-                  <input type="text" name="invoiceNo" value={booking.invoiceNo} onChange={handleBookingChange}
-                    placeholder="e.g. INV-2024-001" className="input text-sm" />
-                </div>
-                {/* 6. COD Amount */}
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">COD Amount (₹)</label>
-                  <input type="number" name="codAmount" value={booking.codAmount} onChange={handleBookingChange}
-                    placeholder="0.00" step="0.01" min="0" className="input text-sm" />
-                </div>
-                {/* 7. Quantity */}
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">Quantity</label>
-                  <input type="number" name="quantity" value={booking.quantity} onChange={handleBookingChange}
-                    placeholder="No. of items" min="1" className="input text-sm" />
-                </div>
-              </div>
-            </div>
-
             {/* Notes */}
             <div>
               <label className="block text-xs font-medium text-zinc-600 mb-1">Notes / Instructions</label>
-              <input type="text" name="notes" value={booking.notes} onChange={handleBookingChange}
-                placeholder="Special handling instructions" className="input text-sm" />
+              <textarea name="notes" value={booking.notes} onChange={handleBookingChange}
+                rows={2} placeholder="Special handling instructions" className="input text-sm resize-none" />
             </div>
 
             {/* Rates Display */}
@@ -728,12 +690,14 @@ export default function AdminOrderDetail() {
             {/* Action Buttons */}
             <div className="flex gap-3 pt-2">
               <button onClick={handleCheckRates} disabled={ratesLoading}
-                className="flex-1 py-2 px-4 border-2 border-blue-500 text-blue-600 font-semibold rounded-lg hover:bg-blue-50 disabled:opacity-50 transition-colors text-sm">
-                {ratesLoading ? 'Checking…' : '🔍 Check Rates'}
+                className="flex-1 inline-flex items-center justify-center gap-2 py-2 px-4 border-2 border-blue-500 text-blue-600 font-semibold rounded-lg hover:bg-blue-50 disabled:opacity-50 transition-colors text-sm">
+                <SearchIcon className="h-4 w-4" />
+                {ratesLoading ? 'Checking…' : 'Check Rates'}
               </button>
               <button onClick={handleBook} disabled={bookingLoading}
-                className="flex-1 py-2 px-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm">
-                {bookingLoading ? 'Booking…' : '🚀 Book Shipment'}
+                className="flex-1 inline-flex items-center justify-center gap-2 py-2 px-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm">
+                <SendIcon className="h-4 w-4" />
+                {bookingLoading ? 'Booking…' : 'Book Shipment'}
               </button>
             </div>
           </div>
