@@ -237,6 +237,27 @@ const DPWorldAdapter = {
     };
   },
 
+  async getDetail(partnerDocketNo, credentials = {}) {
+    const creds = getCredentials(credentials);
+    let trackData;
+    try {
+      trackData = await dpwPost(
+        `${BASE_URL}/consignments/track.json`,
+        { lr: { number: partnerDocketNo } },
+        creds.apiKey, 20000,
+      );
+    } catch (e) { return null; }
+    const lr = trackData?.lr;
+    if (!lr?.id) return null;
+    try {
+      const detailData = await dpwGet(
+        `${BASE_URL}/consignments/${lr.id}/detail.json`,
+        creds.apiKey, 20000,
+      );
+      return detailData?.lr || null;
+    } catch (e) { return null; }
+  },
+
   async trackShipment(partnerDocketNo, credentials = {}) {
     const creds = getCredentials(credentials);
 

@@ -669,6 +669,36 @@ async function getDashboardStats(req, res) {
   }
 }
 
+// ─── Live shipment detail (DP World, admin-only) ─────────────────────────────
+
+async function getLiveShipmentDetail(req, res) {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id },
+      include: { shipment: true },
+    });
+    if (!order || !order.shipment) return failure(res, 'Order or shipment not found', 404);
+
+    const { partnerName, partnerDocketNo } = order.shipment;
+    if (partnerName !== 'DP_WORLD' || !partnerDocketNo) {
+      return failure(res, 'Live detail only available for DP World shipments', 400);
+    }
+
+    const cred = await prisma.partnerCredential.findUnique({ where: { partner: 'DP_WORLD' } });
+    const adapter = getAdapter('DP_WORLD');
+
+    const detail = await adapter.getDetail(partnerDocketNo, {
+      apiKey: cred?.apiKey,
+      extraConfig: cred?.extraConfig,
+    });
+
+    if (!detail) return failure(res, 'Could not fetch live data from DP World', 502);
+    return success(res, { detail });
+  } catch (e) {
+    return failure(res, 'Failed to fetch live shipment detail', 500, e.message);
+  }
+}
+
 module.exports = {
   listAllOrders, getAdminOrder, checkRates, assignAndBook, createDirectBooking,
   addTrackingEvent, updateOrderStatus,
@@ -677,4 +707,5 @@ module.exports = {
   createInvoice, listAdminInvoices, sendInvoice,
   listMISReports, generateMIS, downloadMIS,
   listAdmins, createAdmin, updateAdmin, getDashboardStats,
+  getLiveShipmentDetail,
 };
