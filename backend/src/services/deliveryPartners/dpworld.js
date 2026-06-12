@@ -171,20 +171,8 @@ function buildConsignmentPayload(orderData, isDraft, creds) {
       consignment_type: 'OUTBOUND',
       consignment_contents: { consignment_content: contents },
       consignment_invoices: { consignment_invoice: invoices },
-      // Risk and special services: "Shipper Risk" = owner's/shipper risk, "Carrier Risk" = carrier risk
-      ...buildSpecialServices(orderData),
     },
   };
-}
-
-function buildSpecialServices(orderData) {
-  const services = [];
-  if (orderData.ownersRisk) services.push({ name: 'Shipper Risk' });
-  if (orderData.carrierRisk) services.push({ name: 'Carrier Risk' });
-  if (orderData.appointmentDelivery) services.push({ name: 'Appointment Delivery' });
-  if (orderData.mallDelivery) services.push({ name: 'Mall Delivery' });
-  if (services.length === 0) return {};
-  return { consignment_special_services: { consignment_special_service: services } };
 }
 
 const DPWorldAdapter = {
