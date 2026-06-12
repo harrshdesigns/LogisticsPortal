@@ -169,12 +169,20 @@ export default function AdminOrderDetail() {
   const removePkgRow = (i) => setPackageRows(rows => rows.filter((_, idx) => idx !== i));
 
   const handleCheckRates = async () => {
-    setRatesLoading(true); setRatesData(null);
+    setRatesLoading(true); setRatesData(null); setBookingMsg({ type: '', text: '' });
     try {
-      const { data } = await api.post(`/admin/orders/${id}/check-rates`, { partnerName: booking.partnerName });
+      const { data } = await api.post(`/admin/orders/${id}/check-rates`, {
+        ...booking, items: packageRows,
+      });
       setRatesData(data.data.rates);
     } catch (err) {
-      setBookingMsg({ type: 'error', text: err.response?.data?.message || 'Failed to fetch rates' });
+      const raw = err.response?.data?.data;
+      const msg = err.response?.data?.message || 'Failed to fetch rates';
+      setBookingMsg({
+        type: 'error',
+        text: msg,
+        raw: raw ? JSON.stringify(raw, null, 2) : null,
+      });
     } finally { setRatesLoading(false); }
   };
 
@@ -188,11 +196,20 @@ export default function AdminOrderDetail() {
         if (booking.docketAmPm === 'AM' && hours === 12) hours = 0;
         fullDocketDate = `${booking.docketDate}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
       }
-      await api.post(`/admin/orders/${id}/assign`, { ...booking, docketDate: fullDocketDate, items: packageRows });
-      setBookingMsg({ type: 'success', text: 'Shipment booked successfully with partner!' });
+      const { data } = await api.post(`/admin/orders/${id}/assign`, { ...booking, docketDate: fullDocketDate, items: packageRows });
+      setBookingMsg({
+        type: 'success',
+        text: 'Shipment booked successfully with partner!',
+        raw: data.data?.shipment?.bookingResponse ? JSON.stringify(data.data.shipment.bookingResponse, null, 2) : null,
+      });
       fetchOrder();
     } catch (err) {
-      setBookingMsg({ type: 'error', text: err.response?.data?.message || 'Booking failed' });
+      const raw = err.response?.data?.data;
+      setBookingMsg({
+        type: 'error',
+        text: err.response?.data?.message || 'Booking failed',
+        raw: raw ? JSON.stringify(raw, null, 2) : null,
+      });
     } finally { setBookingLoading(false); }
   };
 
@@ -380,8 +397,13 @@ export default function AdminOrderDetail() {
             </div>
 
             {bookingMsg.text && (
-              <div className={`p-3 rounded-lg text-sm ${bookingMsg.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                {bookingMsg.text}
+              <div className={`rounded-lg text-sm ${bookingMsg.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                <p className="p-3 font-medium">{bookingMsg.text}</p>
+                {bookingMsg.raw && (
+                  <pre className={`px-3 pb-3 text-xs font-mono whitespace-pre-wrap break-all border-t ${bookingMsg.type === 'success' ? 'border-green-200 text-green-800' : 'border-red-200 text-red-800'}`}>
+                    {bookingMsg.raw}
+                  </pre>
+                )}
               </div>
             )}
 
@@ -664,25 +686,39 @@ export default function AdminOrderDetail() {
 
             {/* Rates Display */}
             {ratesData && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-xs font-semibold text-blue-700 mb-2">
-                  Rates from {ratesData.partner?.replace('_', ' ')} — checked at {new Date(ratesData.checkedAt).toLocaleTimeString('en-IN')}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg overflow-hidden">
+                <p className="px-4 pt-3 pb-2 text-xs font-semibold text-blue-700">
+                  {ratesData.partner?.replace('_', ' ')} — checked at {new Date(ratesData.checkedAt).toLocaleTimeString('en-IN')}
+                  {ratesData.draftConsignmentNo && (
+                    <span className="ml-2 font-mono bg-blue-100 px-1.5 py-0.5 rounded text-blue-800">
+                      Draft: {ratesData.draftConsignmentNo}
+                    </span>
+                  )}
                 </p>
-                <div className="space-y-2">
-                  {ratesData.options?.map(opt => (
-                    <div key={opt.service} className="flex items-center justify-between text-sm">
-                      <div>
-                        <span className="font-medium text-zinc-800">{opt.service}</span>
-                        <span className="text-zinc-500 ml-2 text-xs">{opt.estimatedDays} days</span>
+                {/* Mock-style options (non-DP World partners) */}
+                {ratesData.options && (
+                  <div className="space-y-2 px-4 pb-3">
+                    {ratesData.options.map(opt => (
+                      <div key={opt.service} className="flex items-center justify-between text-sm">
+                        <div>
+                          <span className="font-medium text-zinc-800">{opt.service}</span>
+                          <span className="text-zinc-500 ml-2 text-xs">{opt.estimatedDays} days</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-semibold text-zinc-900">₹{opt.total.toLocaleString('en-IN')}</span>
+                          <span className="text-xs text-zinc-400 ml-1">(incl. GST)</span>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <span className="font-semibold text-zinc-900">₹{opt.total.toLocaleString('en-IN')}</span>
-                        <span className="text-xs text-zinc-400 ml-1">(incl. GST)</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {ratesData.note && <p className="text-xs text-zinc-400 mt-2">{ratesData.note}</p>}
+                    ))}
+                    {ratesData.note && <p className="text-xs text-zinc-400 mt-1">{ratesData.note}</p>}
+                  </div>
+                )}
+                {/* Raw API response from live partners */}
+                {ratesData.rawResponse && (
+                  <pre className="px-4 pb-3 text-xs font-mono text-blue-900 whitespace-pre-wrap break-all border-t border-blue-200">
+                    {JSON.stringify(ratesData.rawResponse, null, 2)}
+                  </pre>
+                )}
               </div>
             )}
 

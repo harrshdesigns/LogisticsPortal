@@ -68,12 +68,29 @@ async function getAdminOrder(req, res) {
 
 async function checkRates(req, res) {
   try {
-    const { partnerName } = req.body;
+    const { partnerName, ...formData } = req.body;
     const order = await prisma.order.findUnique({ where: { id: req.params.id } });
     if (!order) return failure(res, 'Order not found', 404);
 
-    // Mock rates — replace with real API call per partner
-    await new Promise(r => setTimeout(r, 800));
+    const cred = await prisma.partnerCredential.findUnique({ where: { partner: partnerName } });
+    const adapter = getAdapter(partnerName);
+
+    // If adapter has a live checkRates, use it
+    if (typeof adapter.checkRates === 'function') {
+      const rateData = {
+        ...order,
+        ...formData,
+        partnerName,
+        loginId: formData.loginId || cred?.loginId,
+        apiKey: cred?.apiKey,
+        apiSecret: cred?.apiSecret,
+        extraConfig: cred?.extraConfig,
+      };
+      const result = await adapter.checkRates(rateData);
+      return success(res, { rates: result }, 'Rates fetched from partner');
+    }
+
+    // Fallback: mock rate estimate for partners without a rates endpoint
     const baseRate = (order.actualWeight || 1) * 45;
     const rates = {
       partner: partnerName,
@@ -83,11 +100,11 @@ async function checkRates(req, res) {
         { service: 'Express', estimatedDays: '2-3', rate: Math.round(baseRate * 1.6), gst: Math.round(baseRate * 1.6 * 0.18), total: Math.round(baseRate * 1.6 * 1.18) },
         { service: 'Priority', estimatedDays: '1', rate: Math.round(baseRate * 2.4), gst: Math.round(baseRate * 2.4 * 0.18), total: Math.round(baseRate * 2.4 * 1.18) },
       ],
-      note: 'Rates are indicative. Final rate confirmed at booking.',
+      note: 'Indicative rates only. Final rate confirmed at booking.',
     };
     return success(res, { rates }, 'Rates fetched successfully');
   } catch (e) {
-    return failure(res, 'Failed to check rates', 500, e.message);
+    return failure(res, e.message || 'Failed to check rates', 500, e.rawResponse || e.message);
   }
 }
 
@@ -118,22 +135,55 @@ async function assignAndBook(req, res) {
     const order = await prisma.order.findUnique({ where: { id: req.params.id } });
     if (!order) return failure(res, 'Order not found', 404);
 
-    // Get partner credential if loginId not provided
-    let resolvedLoginId = loginId;
-    if (!resolvedLoginId) {
-      const cred = await prisma.partnerCredential.findUnique({ where: { partner: partnerName } });
-      resolvedLoginId = cred?.loginId || '';
-    }
+    // Get partner credentials from DB
+    const cred = await prisma.partnerCredential.findUnique({ where: { partner: partnerName } });
+    const resolvedLoginId = loginId || cred?.loginId || '';
 
     const adapter = getAdapter(partnerName);
     const bookingData = {
-      ...order, partnerName,
+      ...order,
+      partnerName,
+      // credential fields for live adapters
+      loginId: resolvedLoginId,
+      apiKey: cred?.apiKey,
+      apiSecret: cred?.apiSecret,
+      extraConfig: cred?.extraConfig,
+      // all form overrides
       consignorName: consignorName || order.consignorName,
+      consignorPin: consignorPin || order.consignorPin,
+      consignorAddressLine1: consignorAddressLine1 || order.consignorAddressLine1,
+      consignorAddressLine2: consignorAddressLine2 ?? order.consignorAddressLine2,
       consignorCity: consignorCity || order.consignorCity,
+      consignorState: consignorState || order.consignorState,
+      consignorContactPerson: consignorContactPerson || order.consignorContactPerson,
+      consignorPhone: consignorPhone || order.consignorPhone,
+      consignorEmail: consignorEmail || order.consignorEmail,
       consigneeName: consigneeName || order.consigneeName,
+      consigneePin: consigneePin || order.consigneePin,
+      consigneeAddressLine1: consigneeAddressLine1 || order.consigneeAddressLine1,
+      consigneeAddressLine2: consigneeAddressLine2 ?? order.consigneeAddressLine2,
       consigneeCity: consigneeCity || order.consigneeCity,
-      actualWeight: actualWeight || order.actualWeight,
+      consigneeState: consigneeState || order.consigneeState,
+      consigneeContactPerson: consigneeContactPerson || order.consigneeContactPerson,
+      consigneePhone: consigneePhone || order.consigneePhone,
+      consigneeEmail: consigneeEmail || order.consigneeEmail,
       serviceType: serviceType || order.serviceType,
+      actualWeight: actualWeight || order.actualWeight,
+      paymentType: paymentType || order.paymentType,
+      carrierRisk: !!carrierRisk,
+      ownersRisk: !!ownersRisk,
+      appointmentDelivery: !!appointmentDelivery,
+      mallDelivery: !!mallDelivery,
+      codPayeeName: codPayeeName || order.codPayeeName,
+      codAmount: codAmount || order.codAmount,
+      invoiceValue: invoiceValue || order.invoiceValue,
+      invoiceNo: invoiceNo || order.invoiceNo,
+      invoiceDate: invoiceDate || order.invoiceDate,
+      ewayBillNo: ewayBillNo || order.ewayBillNo,
+      hsnCode: hsnCode || order.hsnCode,
+      quantity: quantity || order.quantity,
+      docketDate: docketDate || new Date().toISOString(),
+      items: items || [],
     };
     const result = await adapter.bookShipment(bookingData);
     if (!result.success) return failure(res, 'Booking failed with partner', 400, result.rawResponse);
