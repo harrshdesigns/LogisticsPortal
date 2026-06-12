@@ -1,11 +1,11 @@
 // DP World ExpressTMS Live Integration
+// Auth: DP World is stateless — login returns api_key (unchanged) and user email.
+// Subsequent API calls pass user_email + user_token (api_key) as URL query params.
+// IMPORTANT: DP World requires IP whitelisting for consignment endpoints.
+// Contact DP World support to whitelist your production server's outbound IP.
 const axios = require('axios');
 
 const BASE_URL = 'https://expresstms.dpworld.com/integration';
-
-// Module-level token cache
-let _token = null;
-let _tokenExpiry = 0;
 
 const SERVICE_MAP = {
   SURFACE: 'RETAIL-SURFACE-NORMAL',
@@ -41,6 +41,7 @@ function getCredentials(orderData) {
     login: orderData.loginId || process.env.DP_WORLD_LOGIN || 'skent_api',
     password: orderData.apiSecret || process.env.DP_WORLD_PASSWORD || 'SKent@2026',
     apiKey: orderData.apiKey || process.env.DP_WORLD_API_KEY || 'khZ6ZbZpjsMxfTfVGEAejDqxnh9pyiYhF3sfxX8t3l5y3FQjoGdQjJ1NbAEz',
+    email: process.env.DP_WORLD_EMAIL || 'Ske83456@gmail.com',
     companyCode: orderData.extraConfig?.companyCode || process.env.DP_WORLD_COMPANY_CODE || '995137_001',
     companyId: orderData.extraConfig?.companyId || process.env.DP_WORLD_COMPANY_ID || '74463',
     companyName: orderData.extraConfig?.companyName || process.env.DP_WORLD_COMPANY_NAME || 'S K ENTERPRISES',
@@ -48,10 +49,11 @@ function getCredentials(orderData) {
 }
 
 // Wraps an axios call and always throws with { rawResponse } on failure
-async function dpwPost(url, body, headers = {}, timeout = 20000) {
+async function dpwPost(url, body, params = {}, timeout = 20000) {
   try {
     const resp = await axios.post(url, body, {
-      headers: { 'Content-Type': 'application/json', ...headers },
+      headers: { 'Content-Type': 'application/json' },
+      params,
       timeout,
     });
     return resp.data;
@@ -65,37 +67,19 @@ async function dpwPost(url, body, headers = {}, timeout = 20000) {
   }
 }
 
-async function getToken(creds) {
-  if (_token && Date.now() < _tokenExpiry) return _token;
-
-  // Clear stale token before attempting login
-  _token = null;
-
-  const data = await dpwPost(`${BASE_URL}/users/login.json`, {
-    user: {
-      login: creds.login,
-      password: creds.password,
-      api_key: creds.apiKey,
-    },
-  });
-
-  // Handle various token field names DP World might use
-  const token =
-    data?.user?.token ||
-    data?.user?.authentication_token ||
-    data?.user?.auth_token ||
-    data?.token ||
-    data?.auth_token;
-
-  if (!token) {
-    const err = new Error('DP World login succeeded but response contained no token');
-    err.rawResponse = data;
-    throw err;
+// Returns auth query params for DP World API calls.
+// Login to confirm credentials and retrieve the registered email; falls back to env var.
+async function getAuthParams(creds) {
+  let email = creds.email;
+  try {
+    const data = await dpwPost(`${BASE_URL}/users/login.json`, {
+      user: { login: creds.login, password: creds.password, api_key: creds.apiKey },
+    });
+    email = data?.user?.email || email;
+  } catch (e) {
+    // If login itself fails (network, IP issue) fall through with env email
   }
-
-  _token = token;
-  _tokenExpiry = Date.now() + 23 * 60 * 60 * 1000; // 23h
-  return _token;
+  return { user_email: email, user_token: creds.apiKey };
 }
 
 function buildConsignmentPayload(orderData, isDraft, creds) {
@@ -197,13 +181,13 @@ function buildConsignmentPayload(orderData, isDraft, creds) {
 const DPWorldAdapter = {
   async checkRates(orderData) {
     const creds = getCredentials(orderData);
-    const token = await getToken(creds); // throws with rawResponse on failure
+    const authParams = await getAuthParams(creds);
     const payload = buildConsignmentPayload(orderData, true, creds);
 
     const data = await dpwPost(
       `${BASE_URL}/consignments/create.json`,
       payload,
-      { 'X-User-Token': token, 'X-User-Email': creds.login },
+      authParams,
     );
 
     return {
@@ -217,9 +201,9 @@ const DPWorldAdapter = {
 
   async bookShipment(orderData) {
     const creds = getCredentials(orderData);
-    let token;
+    let authParams;
     try {
-      token = await getToken(creds);
+      authParams = await getAuthParams(creds);
     } catch (e) {
       return { success: false, rawResponse: e.rawResponse || { error: e.message } };
     }
@@ -230,7 +214,7 @@ const DPWorldAdapter = {
       data = await dpwPost(
         `${BASE_URL}/consignments/create.json`,
         payload,
-        { 'X-User-Token': token, 'X-User-Email': creds.login },
+        authParams,
       );
     } catch (e) {
       return { success: false, rawResponse: e.rawResponse || { error: e.message } };
@@ -251,9 +235,9 @@ const DPWorldAdapter = {
 
   async trackShipment(partnerDocketNo, credentials = {}) {
     const creds = getCredentials(credentials);
-    let token;
+    let authParams;
     try {
-      token = await getToken(creds);
+      authParams = await getAuthParams(creds);
     } catch (e) {
       return { events: [] };
     }
@@ -263,7 +247,7 @@ const DPWorldAdapter = {
       data = await dpwPost(
         `${BASE_URL}/consignments/list.json`,
         { consignment: { consignment_number: partnerDocketNo } },
-        { 'X-User-Token': token, 'X-User-Email': creds.login },
+        authParams,
       );
     } catch (e) {
       return { events: [] };
