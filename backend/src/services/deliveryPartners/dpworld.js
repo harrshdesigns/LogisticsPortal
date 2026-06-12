@@ -4,6 +4,7 @@
 // DELEX requires dimensions on every consignment_content item.
 // Date format: UTC ISO "YYYY-MM-DDTHH:MM:SSZ"
 // Timeout: 60s — the create endpoint is inherently slow (~45s response time).
+// Risk: API uses "Shipper Risk" (not "Owners Risk") and "Carrier Risk".
 const axios = require('axios');
 
 const BASE_URL = 'https://expresstms.dpworld.com/integration';
@@ -15,11 +16,12 @@ const SERVICE_MAP = {
   WATER: 'RETAIL-SURFACE-NORMAL',
 };
 
+// API valid values: Cartons, Bags, Units, Wooden Box, Kgs, Tonnes, Litres, Gms, Pallets, Crates, Gallons
 const UNIT_TYPE_MAP = {
-  PACKAGES: 'Packages',
+  PACKAGES: 'Units',
   BOXES: 'Cartons',
   BAGS: 'Bags',
-  PACKETS: 'Packets',
+  PACKETS: 'Units',
 };
 
 const PAYMENT_MAP = {
@@ -27,6 +29,21 @@ const PAYMENT_MAP = {
   TO_PAY: 'topay',
   TO_BILL: 'tobill',
   COD: 'cod',
+};
+
+// DP World event_type → normalized status for our tracking system
+const DP_STATUS_MAP = {
+  CREATED: 'BOOKED',
+  GENERAL: 'IN_TRANSIT',
+  INVOICE_UPDATED: 'IN_TRANSIT',
+  SERVICE_LANE_CHANGE: 'IN_TRANSIT',
+  DISPATCHED: 'IN_TRANSIT',
+  REACHED_AT_PICKUP_BRANCH: 'AT_HUB',
+  UNLOADED: 'AT_HUB',
+  OUT_FOR_DELIVERY: 'OUT_FOR_DELIVERY',
+  DELIVERED: 'DELIVERED',
+  EXCEPTION: 'EXCEPTION',
+  RTO: 'EXCEPTION',
 };
 
 function formatDateUTC(d) {
@@ -87,7 +104,7 @@ function buildConsignmentPayload(orderData, isDraft, creds) {
   // DELEX requires dimensions on every content item. Default to safe values if not provided.
   const contents = items.length > 0
     ? items.map((item, idx) => ({
-        product_name: 'PACKAGE',
+        product_name: 'CONSUMER GOODS',
         product_display_name: item.description || 'GOODS',
         reference_number: item.reference || `${orderData.clientDocketNo || 'REF'}-${idx + 1}`,
         units: String(item.packages || 1),
@@ -100,8 +117,7 @@ function buildConsignmentPayload(orderData, isDraft, creds) {
         uom: (item.dimensionUnit || 'CMS').toLowerCase(),
       }))
     : [{
-        // Fallback single item using order-level fields
-        product_name: 'PACKAGE',
+        product_name: 'CONSUMER GOODS',
         product_display_name: orderData.itemDescription || 'GOODS',
         units: String(orderData.packages || '1'),
         unit_type: UNIT_TYPE_MAP[orderData.packagesType] || 'Cartons',
@@ -155,8 +171,20 @@ function buildConsignmentPayload(orderData, isDraft, creds) {
       consignment_type: 'OUTBOUND',
       consignment_contents: { consignment_content: contents },
       consignment_invoices: { consignment_invoice: invoices },
+      // Risk and special services: "Shipper Risk" = owner's/shipper risk, "Carrier Risk" = carrier risk
+      ...buildSpecialServices(orderData),
     },
   };
+}
+
+function buildSpecialServices(orderData) {
+  const services = [];
+  if (orderData.ownersRisk) services.push({ name: 'Shipper Risk' });
+  if (orderData.carrierRisk) services.push({ name: 'Carrier Risk' });
+  if (orderData.appointmentDelivery) services.push({ name: 'Appointment Delivery' });
+  if (orderData.mallDelivery) services.push({ name: 'Mall Delivery' });
+  if (services.length === 0) return {};
+  return { consignment_special_services: { consignment_special_service: services } };
 }
 
 const DPWorldAdapter = {
@@ -252,7 +280,7 @@ const DPWorldAdapter = {
       // Fall back to summary-only if detail fails
       return {
         events: [{
-          status: lr.state?.toUpperCase() || 'IN_TRANSIT',
+          status: DP_STATUS_MAP[lr.state?.toUpperCase()] || 'IN_TRANSIT',
           description: lr.tracking_status || '',
           location: lr.consignee_city || '',
           timestamp: new Date().toISOString(),
@@ -265,7 +293,7 @@ const DPWorldAdapter = {
 
     return {
       events: events.map(ev => ({
-        status: ev.event_type || 'IN_TRANSIT',
+        status: DP_STATUS_MAP[ev.event_type] || ev.event_type || 'IN_TRANSIT',
         description: ev.description || ev.event_type || '',
         location: ev.event_location_display_name || '',
         timestamp: ev.occurred_at || ev.recorded_at || new Date().toISOString(),
