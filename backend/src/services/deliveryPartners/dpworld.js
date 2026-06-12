@@ -3,7 +3,7 @@ const axios = require('axios');
 
 const BASE_URL = 'https://expresstms.dpworld.com/integration';
 
-// Module-level token cache (survives across requests, cleared on restart)
+// Module-level token cache
 let _token = null;
 let _tokenExpiry = 0;
 
@@ -47,20 +47,51 @@ function getCredentials(orderData) {
   };
 }
 
+// Wraps an axios call and always throws with { rawResponse } on failure
+async function dpwPost(url, body, headers = {}, timeout = 20000) {
+  try {
+    const resp = await axios.post(url, body, {
+      headers: { 'Content-Type': 'application/json', ...headers },
+      timeout,
+    });
+    return resp.data;
+  } catch (e) {
+    const status = e.response?.status;
+    const raw = e.response?.data ?? { error: e.message };
+    const err = new Error(`DP World API error (${status ?? 'network'}): ${e.message}`);
+    err.rawResponse = raw;
+    err.status = status;
+    throw err;
+  }
+}
+
 async function getToken(creds) {
   if (_token && Date.now() < _tokenExpiry) return _token;
 
-  const resp = await axios.post(`${BASE_URL}/users/login.json`, {
+  // Clear stale token before attempting login
+  _token = null;
+
+  const data = await dpwPost(`${BASE_URL}/users/login.json`, {
     user: {
       login: creds.login,
       password: creds.password,
       api_key: creds.apiKey,
     },
-  }, { timeout: 15000 });
+  });
 
-  const data = resp.data;
-  const token = data?.user?.token || data?.user?.authentication_token || data?.token;
-  if (!token) throw Object.assign(new Error('DP World login failed: no token in response'), { rawResponse: data });
+  // Handle various token field names DP World might use
+  const token =
+    data?.user?.token ||
+    data?.user?.authentication_token ||
+    data?.user?.auth_token ||
+    data?.token ||
+    data?.auth_token;
+
+  if (!token) {
+    const err = new Error('DP World login succeeded but response contained no token');
+    err.rawResponse = data;
+    throw err;
+  }
 
   _token = token;
   _tokenExpiry = Date.now() + 23 * 60 * 60 * 1000; // 23h
@@ -166,20 +197,21 @@ function buildConsignmentPayload(orderData, isDraft, creds) {
 const DPWorldAdapter = {
   async checkRates(orderData) {
     const creds = getCredentials(orderData);
-    const token = await getToken(creds);
+    const token = await getToken(creds); // throws with rawResponse on failure
     const payload = buildConsignmentPayload(orderData, true, creds);
 
-    const resp = await axios.post(`${BASE_URL}/consignments/create.json`, payload, {
-      headers: { 'X-User-Token': token, 'X-User-Email': creds.login, 'Content-Type': 'application/json' },
-      timeout: 20000,
-    });
+    const data = await dpwPost(
+      `${BASE_URL}/consignments/create.json`,
+      payload,
+      { 'X-User-Token': token, 'X-User-Email': creds.login },
+    );
 
     return {
       success: true,
       partner: 'DP_WORLD',
       checkedAt: new Date().toISOString(),
-      draftConsignmentNo: resp.data?.consignment?.consignment_number || null,
-      rawResponse: resp.data,
+      draftConsignmentNo: data?.consignment?.consignment_number || null,
+      rawResponse: data,
     };
   },
 
@@ -193,28 +225,27 @@ const DPWorldAdapter = {
     }
 
     const payload = buildConsignmentPayload(orderData, false, creds);
-
-    let resp;
+    let data;
     try {
-      resp = await axios.post(`${BASE_URL}/consignments/create.json`, payload, {
-        headers: { 'X-User-Token': token, 'X-User-Email': creds.login, 'Content-Type': 'application/json' },
-        timeout: 20000,
-      });
+      data = await dpwPost(
+        `${BASE_URL}/consignments/create.json`,
+        payload,
+        { 'X-User-Token': token, 'X-User-Email': creds.login },
+      );
     } catch (e) {
-      const raw = e.response?.data || { error: e.message };
-      return { success: false, rawResponse: raw };
+      return { success: false, rawResponse: e.rawResponse || { error: e.message } };
     }
 
-    const consignmentNo = resp.data?.consignment?.consignment_number;
+    const consignmentNo = data?.consignment?.consignment_number;
     if (!consignmentNo) {
-      return { success: false, rawResponse: resp.data };
+      return { success: false, rawResponse: data };
     }
 
     return {
       success: true,
       partnerDocketNo: consignmentNo,
-      estimatedDelivery: resp.data?.consignment?.estimated_delivery || null,
-      rawResponse: resp.data,
+      estimatedDelivery: data?.consignment?.estimated_delivery || null,
+      rawResponse: data,
     };
   },
 
@@ -227,37 +258,32 @@ const DPWorldAdapter = {
       return { events: [] };
     }
 
-    let resp;
+    let data;
     try {
-      resp = await axios.post(`${BASE_URL}/consignments/list.json`, {
-        consignment: { consignment_number: partnerDocketNo },
-      }, {
-        headers: { 'X-User-Token': token, 'X-User-Email': creds.login, 'Content-Type': 'application/json' },
-        timeout: 15000,
-      });
+      data = await dpwPost(
+        `${BASE_URL}/consignments/list.json`,
+        { consignment: { consignment_number: partnerDocketNo } },
+        { 'X-User-Token': token, 'X-User-Email': creds.login },
+      );
     } catch (e) {
       return { events: [] };
     }
 
-    // Normalize tracking events from DP World response
-    const raw = resp.data;
-    const events = [];
+    const trackingData =
+      data?.consignment?.tracking_events ||
+      data?.consignments?.[0]?.tracking_events ||
+      data?.tracking_events ||
+      [];
 
-    const trackingData = raw?.consignment?.tracking_events
-      || raw?.consignments?.[0]?.tracking_events
-      || raw?.tracking_events
-      || [];
-
-    for (const ev of trackingData) {
-      events.push({
+    return {
+      events: trackingData.map(ev => ({
         status: ev.status || 'IN_TRANSIT',
         description: ev.description || ev.remarks || ev.status || '',
         location: ev.location || ev.city || '',
         timestamp: ev.timestamp || ev.event_time || new Date().toISOString(),
-      });
-    }
-
-    return { events, rawResponse: raw };
+      })),
+      rawResponse: data,
+    };
   },
 };
 
