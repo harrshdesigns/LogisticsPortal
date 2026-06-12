@@ -687,14 +687,36 @@ export default function AdminOrderDetail() {
             {/* Rates Display */}
             {ratesData && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg overflow-hidden">
-                <p className="px-4 pt-3 pb-2 text-xs font-semibold text-blue-700">
-                  {ratesData.partner?.replace('_', ' ')} — checked at {new Date(ratesData.checkedAt).toLocaleTimeString('en-IN')}
-                  {ratesData.draftConsignmentNo && (
-                    <span className="ml-2 font-mono bg-blue-100 px-1.5 py-0.5 rounded text-blue-800">
-                      Draft: {ratesData.draftConsignmentNo}
+                <p className="px-4 pt-3 pb-2 text-xs font-semibold text-blue-700 flex items-center gap-2 flex-wrap">
+                  <span>{ratesData.partner?.replace(/_/g, ' ')} — checked at {new Date(ratesData.checkedAt).toLocaleTimeString('en-IN')}</span>
+                  {ratesData.draftId && (
+                    <span className="font-mono bg-blue-100 px-1.5 py-0.5 rounded text-blue-800">
+                      Draft #{ratesData.draftId}
                     </span>
                   )}
                 </p>
+
+                {/* DP World live response — show delivery branch + service cleanly */}
+                {(ratesData.deliveryBranch || ratesData.serviceOption) && (
+                  <div className="px-4 pb-3 grid grid-cols-2 gap-3">
+                    {ratesData.deliveryBranch && (
+                      <div className="bg-white rounded border border-blue-200 px-3 py-2">
+                        <p className="text-xs text-blue-500 font-medium mb-0.5">Delivery Branch</p>
+                        <p className="text-sm font-semibold text-zinc-800">{ratesData.deliveryBranch}</p>
+                      </div>
+                    )}
+                    {ratesData.serviceOption && (
+                      <div className="bg-white rounded border border-blue-200 px-3 py-2">
+                        <p className="text-xs text-blue-500 font-medium mb-0.5">Service Lane</p>
+                        <p className="text-sm font-semibold text-zinc-800">{ratesData.serviceOption}</p>
+                      </div>
+                    )}
+                    <p className="col-span-2 text-xs text-blue-600">
+                      DP World API confirms route only — pricing is billed separately per contract.
+                    </p>
+                  </div>
+                )}
+
                 {/* Mock-style options (non-DP World partners) */}
                 {ratesData.options && (
                   <div className="space-y-2 px-4 pb-3">
@@ -712,12 +734,6 @@ export default function AdminOrderDetail() {
                     ))}
                     {ratesData.note && <p className="text-xs text-zinc-400 mt-1">{ratesData.note}</p>}
                   </div>
-                )}
-                {/* Raw API response from live partners */}
-                {ratesData.rawResponse && (
-                  <pre className="px-4 pb-3 text-xs font-mono text-blue-900 whitespace-pre-wrap break-all border-t border-blue-200">
-                    {JSON.stringify(ratesData.rawResponse, null, 2)}
-                  </pre>
                 )}
               </div>
             )}
