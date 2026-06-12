@@ -12,6 +12,7 @@ const { startTrackingSyncJob } = require('./jobs/trackingSync.job');
 const app = express();
 
 const allowedOrigins = [
+  'https://skentlogistics.vercel.app',
   process.env.FRONTEND_URL,
   'http://localhost:5173',
   'http://localhost:4173',

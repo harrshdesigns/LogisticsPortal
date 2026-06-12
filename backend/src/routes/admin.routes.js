@@ -33,7 +33,7 @@ router.post('/bookings/direct', createDirectBooking);
 
 // Partner credentials
 router.get('/partner-credentials', getPartnerCredentials);
-router.put('/partner-credentials/:partner', requireRole('SUPER_ADMIN'), upsertPartnerCredential);
+router.put('/partner-credentials/:partner', upsertPartnerCredential);
 
 // Saved Consignors
 router.get('/saved-consignors', listSavedConsignors);
