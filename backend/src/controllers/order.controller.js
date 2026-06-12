@@ -7,8 +7,18 @@ const prisma = new PrismaClient();
 // Descriptions that contain internal partner/charge info — never shown to customers.
 const INTERNAL_EVENT_PATTERN = /charge|invoice updated|label.{0,15}print/i;
 
-function customerVisibleEvents(events = []) {
-  return events.filter(ev => !INTERNAL_EVENT_PATTERN.test(ev.description));
+function customerVisibleEvents(events = [], partnerDocketNo = null) {
+  return events
+    .filter(ev => !INTERNAL_EVENT_PATTERN.test(ev.description))
+    .map(ev => {
+      if (!partnerDocketNo) return ev;
+      // Strip LR/partner docket number from description text
+      const cleaned = ev.description
+        .replace(new RegExp(`\\b${partnerDocketNo}\\b`, 'g'), 'your shipment')
+        .replace(/\bLR\b\s*/gi, '')
+        .trim();
+      return { ...ev, description: cleaned || ev.description };
+    });
 }
 
 async function createOrder(req, res) {
@@ -147,7 +157,7 @@ async function getOrder(req, res) {
         ...orderData,
         shipment: shipment ? {
           bookedAt: shipment.bookedAt,
-          trackingEvents: customerVisibleEvents(shipment.trackingEvents),
+          trackingEvents: customerVisibleEvents(shipment.trackingEvents, shipment.partnerDocketNo),
         } : null,
       },
     });
@@ -170,7 +180,7 @@ async function trackOrder(req, res) {
     return success(res, {
       order: {
         ...orderData,
-        trackingEvents: customerVisibleEvents(shipment?.trackingEvents || []),
+        trackingEvents: customerVisibleEvents(shipment?.trackingEvents || [], shipment?.partnerDocketNo),
       },
     });
   } catch (e) {
