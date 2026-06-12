@@ -4,6 +4,13 @@ const { sendMail, orderConfirmationTemplate } = require('../services/email.servi
 
 const prisma = new PrismaClient();
 
+// Descriptions that contain internal partner/charge info — never shown to customers.
+const INTERNAL_EVENT_PATTERN = /charge|invoice updated|label.{0,15}print/i;
+
+function customerVisibleEvents(events = []) {
+  return events.filter(ev => !INTERNAL_EVENT_PATTERN.test(ev.description));
+}
+
 async function createOrder(req, res) {
   try {
     const {
@@ -133,7 +140,17 @@ async function getOrder(req, res) {
       include: { shipment: { include: { trackingEvents: { orderBy: { timestamp: 'desc' } } } } },
     });
     if (!order) return failure(res, 'Order not found', 404);
-    return success(res, { order });
+    // Strip partner docket and filter internal events before returning to customer
+    const { shipment, ...orderData } = order;
+    return success(res, {
+      order: {
+        ...orderData,
+        shipment: shipment ? {
+          bookedAt: shipment.bookedAt,
+          trackingEvents: customerVisibleEvents(shipment.trackingEvents),
+        } : null,
+      },
+    });
   } catch (e) {
     return failure(res, 'Failed to fetch order', 500, e.message);
   }
@@ -148,13 +165,13 @@ async function trackOrder(req, res) {
     });
     if (!order) return failure(res, 'Docket number not found', 404);
 
-    // Strip partner details before returning
+    // Strip all partner details and filter internal events before returning
     const { shipment, ...orderData } = order;
     return success(res, {
       order: {
         ...orderData,
-        trackingEvents: shipment?.trackingEvents || [],
-      }
+        trackingEvents: customerVisibleEvents(shipment?.trackingEvents || []),
+      },
     });
   } catch (e) {
     return failure(res, 'Failed to track order', 500, e.message);
