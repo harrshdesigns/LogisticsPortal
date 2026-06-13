@@ -4,7 +4,7 @@ const { authenticate, requireRole } = require('../middleware/auth');
 const {
   createOrder, listOrders, getOrder, trackOrder,
   listInvoices, downloadInvoice,
-  listAddresses, createAddress,
+  listAddresses, createAddress, syncTrackingCustomer,
 } = require('../controllers/order.controller');
 
 // Public tracking — no auth required
@@ -14,6 +14,7 @@ router.get('/track/:docketNo', trackOrder);
 router.post('/orders', authenticate, requireRole('CUSTOMER'), createOrder);
 router.get('/orders', authenticate, requireRole('CUSTOMER'), listOrders);
 router.get('/orders/:docketNo', authenticate, requireRole('CUSTOMER'), getOrder);
+router.post('/orders/:docketNo/sync-tracking', authenticate, requireRole('CUSTOMER'), syncTrackingCustomer);
 router.get('/invoices', authenticate, requireRole('CUSTOMER'), listInvoices);
 router.get('/invoices/:id/download', authenticate, requireRole('CUSTOMER'), downloadInvoice);
 router.get('/addresses', authenticate, requireRole('CUSTOMER'), listAddresses);

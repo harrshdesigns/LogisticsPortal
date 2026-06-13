@@ -4,6 +4,7 @@ import api from '../../services/api';
 import StatusBadge from '../../components/shared/StatusBadge';
 import { PageLoader } from '../../components/shared/LoadingSpinner';
 import { MapPinIcon, SearchIcon, SendIcon, CheckIcon, XMarkIcon, ReceiptIcon } from '../../components/shared/Icons';
+import { printDocket } from '../../utils/printDocket';
 
 const PARTNERS = ['DELHIVERY', 'DP_WORLD', 'VRL', 'DTDC', 'MANUAL'];
 const ALL_STATUSES = ['PENDING','ASSIGNED','BOOKED','IN_TRANSIT','OUT_FOR_DELIVERY','DELIVERED','EXCEPTION','CANCELLED'];
@@ -82,6 +83,8 @@ export default function AdminOrderDetail() {
   const [liveDetailLoading, setLiveDetailLoading] = useState(false);
   const [eventsOpen, setEventsOpen] = useState(false);
   const [chargesOpen, setChargesOpen] = useState(false);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
 
   const fetchOrder = useCallback(() => {
     api.get(`/admin/orders/${id}`)
@@ -155,11 +158,8 @@ export default function AdminOrderDetail() {
   useEffect(() => {
     if (!order?.shipment?.bookedAt) return;
     if (order.shipment?.partnerName !== 'DP_WORLD') return;
-    setLiveDetailLoading(true);
-    api.get(`/admin/orders/${id}/live-detail`)
-      .then(({ data }) => setLiveDetail(data.data.detail))
-      .catch(() => setLiveDetail(null))
-      .finally(() => setLiveDetailLoading(false));
+    fetchLiveDetail();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order?.shipment?.bookedAt, id]);
 
   const handleBookingChange = e => {
@@ -225,6 +225,31 @@ export default function AdminOrderDetail() {
     try { await api.patch(`/admin/orders/${id}/status`, { status: statusValue }); fetchOrder(); }
     catch (err) { alert(err.response?.data?.message || 'Failed to update status'); }
     finally { setStatusLoading(false); }
+  };
+
+  const fetchLiveDetail = () => {
+    setLiveDetailLoading(true);
+    api.get(`/admin/orders/${id}/live-detail`)
+      .then(({ data }) => setLiveDetail(data.data.detail))
+      .catch(() => setLiveDetail(null))
+      .finally(() => setLiveDetailLoading(false));
+  };
+
+  const handleSyncTracking = async () => {
+    setSyncLoading(true);
+    setSyncMsg('');
+    try {
+      const { data } = await api.post(`/admin/orders/${id}/sync-tracking`);
+      const added = data.data.newEvents;
+      setSyncMsg(added > 0 ? `${added} new event${added !== 1 ? 's' : ''}` : 'Already up to date');
+      fetchOrder();
+      if (order?.shipment?.partnerName === 'DP_WORLD') fetchLiveDetail();
+    } catch (err) {
+      setSyncMsg(err.response?.data?.message || 'Sync failed');
+    } finally {
+      setSyncLoading(false);
+      setTimeout(() => setSyncMsg(''), 4000);
+    }
   };
 
   if (loading) return <PageLoader />;
@@ -331,7 +356,22 @@ export default function AdminOrderDetail() {
 
           {/* Customer Timeline (filtered — what customer sees) */}
           <div className="card p-4">
-            <p className="text-xs font-semibold text-zinc-400 uppercase mb-3">Customer Timeline</p>
+            <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+              <p className="text-xs font-semibold text-zinc-400 uppercase">Customer Timeline</p>
+              {isBooked && (
+                <div className="flex items-center gap-2">
+                  {syncMsg && <span className="text-xs text-zinc-500 italic">{syncMsg}</span>}
+                  <button onClick={handleSyncTracking} disabled={syncLoading}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 border border-blue-200 rounded px-2 py-1 hover:bg-blue-50 disabled:opacity-50 transition-colors">
+                    {syncLoading ? '…' : '↻ Refresh'}
+                  </button>
+                  <button onClick={() => printDocket(order, liveDetail, true)}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-zinc-600 border border-zinc-200 rounded px-2 py-1 hover:bg-zinc-50 transition-colors">
+                    🖨 Print Docket
+                  </button>
+                </div>
+              )}
+            </div>
             {custEvents.length === 0 ? (
               <p className="text-sm text-zinc-400">No customer-visible events yet</p>
             ) : (
@@ -862,15 +902,20 @@ export default function AdminOrderDetail() {
 
               {/* Admin Events (all events, collapsible) */}
               <div className="card overflow-hidden">
-                <button onClick={() => setEventsOpen(o => !o)}
-                  className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-zinc-50 transition-colors">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-transparent hover:bg-zinc-50 transition-colors">
+                  <button onClick={() => setEventsOpen(o => !o)} className="flex items-center gap-2 flex-1 text-left">
                     <span className="text-sm font-semibold text-zinc-700">All Events</span>
                     <span className="text-xs bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded-full font-medium">{allEvents.length}</span>
                     <span className="text-xs text-zinc-400">(Admin View)</span>
+                  </button>
+                  <div className="flex items-center gap-2 ml-2">
+                    <button onClick={handleSyncTracking} disabled={syncLoading}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 border border-blue-200 rounded px-2 py-1 hover:bg-blue-50 disabled:opacity-50 transition-colors">
+                      {syncLoading ? '…' : '↻ Refresh'}
+                    </button>
+                    <button onClick={() => setEventsOpen(o => !o)} className="text-zinc-400 text-xs">{eventsOpen ? '▲' : '▼'}</button>
                   </div>
-                  <span className="text-zinc-400 text-xs">{eventsOpen ? '▲' : '▼'}</span>
-                </button>
+                </div>
                 {eventsOpen && (
                   <div className="border-t border-zinc-100">
                     {allEvents.length === 0 ? (

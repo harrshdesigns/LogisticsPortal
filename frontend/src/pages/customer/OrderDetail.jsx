@@ -1,22 +1,47 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../../services/api';
 import StatusBadge from '../../components/shared/StatusBadge';
 import { PageLoader } from '../../components/shared/LoadingSpinner';
 import { PhoneIcon, MailIcon, MapPinIcon } from '../../components/shared/Icons';
+import { printDocket } from '../../utils/printDocket';
 
 export default function OrderDetail() {
   const { docketNo } = useParams();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
 
-  useEffect(() => {
+  const fetchOrder = useCallback(() => {
     api.get(`/orders/${docketNo}`)
       .then(({ data }) => setOrder(data.data.order))
       .catch(() => setError('Order not found'))
       .finally(() => setLoading(false));
   }, [docketNo]);
+
+  const handleSync = async () => {
+    setSyncLoading(true);
+    setSyncMsg('');
+    try {
+      const { data } = await api.post(`/orders/${docketNo}/sync-tracking`);
+      setOrder(data.data.order);
+      const added = data.data.newEvents;
+      setSyncMsg(added > 0 ? `${added} new update${added !== 1 ? 's' : ''} found` : 'Already up to date');
+    } catch (err) {
+      if (err.response?.status === 400) {
+        setSyncMsg('Live tracking not available for this shipment');
+      } else {
+        setSyncMsg('Refresh failed — try again');
+      }
+    } finally {
+      setSyncLoading(false);
+      setTimeout(() => setSyncMsg(''), 4000);
+    }
+  };
+
+  useEffect(() => { fetchOrder(); }, [fetchOrder]);
 
   if (loading) return <PageLoader />;
   if (error || !order) return (
@@ -125,7 +150,24 @@ export default function OrderDetail() {
 
         {/* Tracking Timeline */}
         <div className="card p-5">
-          <h2 className="text-sm font-semibold text-zinc-700 mb-5">Tracking Timeline</h2>
+          <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
+            <h2 className="text-sm font-semibold text-zinc-700">Tracking Timeline</h2>
+            <div className="flex items-center gap-2">
+              {syncMsg && <span className={`text-xs ${syncMsg.includes('failed') ? 'text-red-500' : 'text-zinc-400'}`}>{syncMsg}</span>}
+              {order.shipment?.bookedAt && (
+                <button onClick={handleSync} disabled={syncLoading}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 border border-blue-200 rounded px-2.5 py-1 hover:bg-blue-50 disabled:opacity-50 transition-colors">
+                  {syncLoading ? '…' : '↻ Refresh'}
+                </button>
+              )}
+              {order.shipment?.bookedAt && (
+                <button onClick={() => printDocket(order, null, false)}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-zinc-600 border border-zinc-200 rounded px-2.5 py-1 hover:bg-zinc-50 transition-colors">
+                  🖨 Print Docket
+                </button>
+              )}
+            </div>
+          </div>
           <p className="text-xs text-zinc-400 mb-4 font-mono">Docket: {order.clientDocketNo}</p>
           {events.length === 0 ? (
             <p className="text-sm text-zinc-400">No tracking events yet. Check back once your shipment is picked up.</p>

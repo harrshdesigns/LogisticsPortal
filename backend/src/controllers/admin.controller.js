@@ -669,6 +669,68 @@ async function getDashboardStats(req, res) {
   }
 }
 
+// ─── Manual tracking sync (admin) ────────────────────────────────────────────
+
+async function syncTracking(req, res) {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id },
+      include: { shipment: { include: { trackingEvents: { orderBy: { timestamp: 'desc' } } } } },
+    });
+    if (!order) return failure(res, 'Order not found', 404);
+    if (!order.shipment?.partnerDocketNo) return failure(res, 'No partner shipment to sync', 400);
+    if (order.shipment.partnerName === 'MANUAL') return failure(res, 'Manual shipments cannot be synced', 400);
+
+    const cred = await prisma.partnerCredential.findUnique({ where: { partner: order.shipment.partnerName } });
+    const adapter = getAdapter(order.shipment.partnerName);
+
+    const result = await adapter.trackShipment(order.shipment.partnerDocketNo, {
+      apiKey: cred?.apiKey,
+      extraConfig: cred?.extraConfig,
+    });
+
+    let added = 0;
+    for (const ev of result.events) {
+      const ts = new Date(ev.timestamp);
+      const exists = order.shipment.trackingEvents.some(
+        e => e.status === ev.status && Math.abs(new Date(e.timestamp) - ts) < 60000
+      );
+      if (!exists) {
+        await prisma.trackingEvent.create({
+          data: {
+            shipmentId: order.shipment.id,
+            status: ev.status,
+            description: ev.description || '',
+            location: ev.location || '',
+            timestamp: ts,
+            source: 'API',
+          },
+        });
+        added++;
+        if (ev.status === 'DELIVERED') {
+          await prisma.order.update({ where: { id: order.id }, data: { status: 'DELIVERED' } });
+        } else if (ev.status === 'OUT_FOR_DELIVERY') {
+          await prisma.order.update({ where: { id: order.id }, data: { status: 'OUT_FOR_DELIVERY' } });
+        } else if (['IN_TRANSIT', 'AT_HUB'].includes(ev.status) && order.status === 'BOOKED') {
+          await prisma.order.update({ where: { id: order.id }, data: { status: 'IN_TRANSIT' } });
+        }
+      }
+    }
+
+    const updated = await prisma.order.findUnique({
+      where: { id: order.id },
+      include: {
+        user: { select: { id: true, name: true, email: true, company: true, gstin: true, phone: true } },
+        shipment: { include: { trackingEvents: { orderBy: { timestamp: 'desc' } }, bookedByAdmin: { select: { id: true, name: true, email: true } } } },
+        items: true,
+      },
+    });
+    return success(res, { order: updated, newEvents: added }, `Synced — ${added} new event${added !== 1 ? 's' : ''}`);
+  } catch (e) {
+    return failure(res, 'Sync failed', 500, e.message);
+  }
+}
+
 // ─── Standalone rate check (no order required — used by direct booking form) ──
 
 async function checkRatesDirect(req, res) {
@@ -733,4 +795,5 @@ module.exports = {
   listAdmins, createAdmin, updateAdmin, getDashboardStats,
   getLiveShipmentDetail,
   checkRatesDirect,
+  syncTracking,
 };
