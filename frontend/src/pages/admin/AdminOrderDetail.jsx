@@ -85,7 +85,6 @@ export default function AdminOrderDetail() {
   const [chargesOpen, setChargesOpen] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
-  const [dpwPrintLoading, setDpwPrintLoading] = useState(false);
 
   const fetchOrder = useCallback(() => {
     api.get(`/admin/orders/${id}`)
@@ -236,51 +235,11 @@ export default function AdminOrderDetail() {
       .finally(() => setLiveDetailLoading(false));
   };
 
-  const handleDPWorldPrint = async () => {
-    setDpwPrintLoading(true);
-    try {
-      const { data } = await api.get(`/admin/orders/${id}/dpworld-print`);
-      const { html, printUrl, requiresPortalLogin } = data.data;
-
-      if (html) {
-        // Render proxied HTML in a full-screen iframe overlay — no popup, never blocked
-        const frameId = `dpw-print-${Date.now()}`;
-        const iframe = document.createElement('iframe');
-        iframe.id = frameId;
-        iframe.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:2147483647;background:#fff;';
-        document.body.appendChild(iframe);
-
-        const doc = iframe.contentDocument || iframe.contentWindow.document;
-        doc.open();
-        doc.write(html);
-        doc.close();
-
-        const cleanup = () => {
-          const f = document.getElementById(frameId);
-          if (f) f.parentNode.removeChild(f);
-        };
-        if (iframe.contentWindow) iframe.contentWindow.onafterprint = cleanup;
-        setTimeout(cleanup, 300000);
-      } else if (printUrl) {
-        // Portal session required — use an anchor click (never blocked, unlike window.open)
-        const a = document.createElement('a');
-        a.href = printUrl;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        if (requiresPortalLogin) {
-          alert('If a DP World login screen appeared, log in to the ExpressTMS portal first, then click DP World Print again.');
-        }
-      } else {
-        alert('Could not retrieve print data from DP World.');
-      }
-    } catch (err) {
-      alert(err.response?.data?.message || 'Could not fetch DP World print');
-    } finally {
-      setDpwPrintLoading(false);
-    }
+  const handleDPWorldPrint = () => {
+    // DP World's portal print URL requires a browser session — API key is not sufficient.
+    // Use our own renderer with isAdmin=true: DP World header + partnerDocketNo (LR number)
+    // + all live data already fetched from the DP World API.
+    printDocket(order, liveDetail, true);
   };
 
   const handleSyncTracking = async () => {
@@ -783,14 +742,9 @@ export default function AdminOrderDetail() {
                   {isDPWorld && partnerDocketNo && (
                     <button
                       onClick={handleDPWorldPrint}
-                      disabled={dpwPrintLoading}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-700 text-white text-sm font-semibold rounded-lg hover:bg-blue-800 disabled:opacity-50 transition-colors shadow-sm"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-700 text-white text-sm font-semibold rounded-lg hover:bg-blue-800 transition-colors shadow-sm"
                     >
-                      {dpwPrintLoading ? (
-                        <><div className="h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Fetching…</>
-                      ) : (
-                        <>🖨 DP World Print</>
-                      )}
+                      🖨 DP World Print
                     </button>
                   )}
                 </div>
