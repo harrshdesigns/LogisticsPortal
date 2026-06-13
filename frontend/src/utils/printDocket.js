@@ -378,12 +378,28 @@ window.onload = function() {
 </body>
 </html>`;
 
-  // No features string — browsers block popup windows but never block plain new tabs
-  const w = window.open('', '_blank');
-  if (w) {
-    w.document.write(html);
-    w.document.close();
-  } else {
-    alert('Pop-up blocked. Please allow pop-ups for this site and try again.');
+  // Use a full-screen iframe overlay instead of window.open.
+  // Browsers never treat iframes as popups, so this works regardless of popup settings.
+  const frameId = `docket-print-${Date.now()}`;
+  const iframe = document.createElement('iframe');
+  iframe.id = frameId;
+  iframe.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:2147483647;background:#fff;';
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentDocument || iframe.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  const cleanup = () => {
+    const f = document.getElementById(frameId);
+    if (f) f.parentNode.removeChild(f);
+  };
+
+  // Remove overlay when print dialog closes (or user cancels)
+  if (iframe.contentWindow) {
+    iframe.contentWindow.onafterprint = cleanup;
   }
+  // Safety fallback
+  setTimeout(cleanup, 300000);
 }

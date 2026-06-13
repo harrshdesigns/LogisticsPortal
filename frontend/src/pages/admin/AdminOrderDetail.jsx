@@ -238,33 +238,45 @@ export default function AdminOrderDetail() {
 
   const handleDPWorldPrint = async () => {
     setDpwPrintLoading(true);
-    // Open blank tab NOW while the user gesture is active — browsers block window.open after await
-    const w = window.open('', '_blank');
-    if (!w) {
-      alert('Pop-up blocked. Please allow pop-ups for this site and try again.');
-      setDpwPrintLoading(false);
-      return;
-    }
-    w.document.write('<html><body style="font-family:sans-serif;padding:40px;color:#555">Loading DP World docket…</body></html>');
     try {
       const { data } = await api.get(`/admin/orders/${id}/dpworld-print`);
       const { html, printUrl, requiresPortalLogin } = data.data;
 
       if (html) {
-        w.document.open();
-        w.document.write(html);
-        w.document.close();
+        // Render proxied HTML in a full-screen iframe overlay — no popup, never blocked
+        const frameId = `dpw-print-${Date.now()}`;
+        const iframe = document.createElement('iframe');
+        iframe.id = frameId;
+        iframe.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:2147483647;background:#fff;';
+        document.body.appendChild(iframe);
+
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        doc.open();
+        doc.write(html);
+        doc.close();
+
+        const cleanup = () => {
+          const f = document.getElementById(frameId);
+          if (f) f.parentNode.removeChild(f);
+        };
+        if (iframe.contentWindow) iframe.contentWindow.onafterprint = cleanup;
+        setTimeout(cleanup, 300000);
       } else if (printUrl) {
-        w.location.href = printUrl;
+        // Portal session required — use an anchor click (never blocked, unlike window.open)
+        const a = document.createElement('a');
+        a.href = printUrl;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
         if (requiresPortalLogin) {
-          setTimeout(() => alert('If a DP World login screen appeared, log in to the ExpressTMS portal first, then click DP World Print again.'), 500);
+          alert('If a DP World login screen appeared, log in to the ExpressTMS portal first, then click DP World Print again.');
         }
       } else {
-        w.close();
         alert('Could not retrieve print data from DP World.');
       }
     } catch (err) {
-      w.close();
       alert(err.response?.data?.message || 'Could not fetch DP World print');
     } finally {
       setDpwPrintLoading(false);
