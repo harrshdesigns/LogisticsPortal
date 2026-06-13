@@ -9,7 +9,7 @@ const {
   createInvoice, listAdminInvoices, sendInvoice,
   listMISReports, generateMIS, downloadMIS,
   listAdmins, createAdmin, updateAdmin, getDashboardStats,
-  getLiveShipmentDetail,
+  getLiveShipmentDetail, checkRatesDirect,
 } = require('../controllers/admin.controller');
 const {
   listSavedConsignors, createSavedConsignor, updateSavedConsignor, deleteSavedConsignor,
@@ -32,6 +32,7 @@ router.patch('/orders/:id/status', updateOrderStatus);
 
 // Direct booking (admin creates without customer)
 router.post('/bookings/direct', createDirectBooking);
+router.post('/bookings/check-rates', checkRatesDirect);
 
 // Partner credentials
 router.get('/partner-credentials', getPartnerCredentials);

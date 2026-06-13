@@ -41,6 +41,9 @@ export default function AdminDirectBooking() {
   const [savedConsignors, setSavedConsignors] = useState([]);
   const [savedConsignees, setSavedConsignees] = useState([]);
   const [credentials, setCredentials] = useState({});
+  const [ratesData, setRatesData] = useState(null);
+  const [ratesLoading, setRatesLoading] = useState(false);
+  const [ratesMsg, setRatesMsg] = useState({ type: '', text: '' });
 
   const [form, setForm] = useState(() => ({
     // Top section
@@ -194,6 +197,37 @@ export default function AdminDirectBooking() {
   const removeRow = idx => setPackageRows(prev => prev.filter((_, i) => i !== idx));
   const updateRow = (idx, field, value) =>
     setPackageRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+
+  const handleCheckRates = async () => {
+    setRatesLoading(true); setRatesData(null); setRatesMsg({ type: '', text: '' });
+    try {
+      let docketDate = null;
+      if (form.docketDate) {
+        const [h, m] = (form.docketTime || '12:00').split(':').map(Number);
+        let hours = h;
+        if (form.docketAmPm === 'PM' && hours < 12) hours += 12;
+        if (form.docketAmPm === 'AM' && hours === 12) hours = 0;
+        const d = new Date(form.docketDate);
+        d.setHours(hours, m, 0, 0);
+        docketDate = d.toISOString();
+      }
+      const { consignorId, consigneeId, docketTime, docketAmPm, ...rest } = form;
+      const { data } = await api.post('/admin/bookings/check-rates', {
+        ...rest,
+        partnerName: form.primaryServiceProvider,
+        docketDate,
+        items: packageRows.filter(r => r.description || r.packages),
+      });
+      setRatesData(data.data.rates);
+    } catch (e) {
+      const raw = e.response?.data?.data;
+      setRatesMsg({
+        type: 'error',
+        text: e.response?.data?.message || 'Failed to fetch rates',
+        raw: raw ? JSON.stringify(raw, null, 2) : null,
+      });
+    } finally { setRatesLoading(false); }
+  };
 
   const handleSubmit = async () => {
     if (!form.consignorName.trim()) { setError('Consignor name is required'); return; }
@@ -649,8 +683,67 @@ export default function AdminDirectBooking() {
           rows={3} className="input text-sm resize-y" />
       </div>
 
-      {/* ── Submit ── */}
-      <div className="flex justify-end">
+      {/* ── Rates display ── */}
+      {ratesMsg.text && (
+        <div className={`rounded-lg text-sm ${ratesMsg.type === 'error' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
+          <p className="p-3 font-medium">{ratesMsg.text}</p>
+          {ratesMsg.raw && (
+            <pre className="px-3 pb-3 text-xs font-mono whitespace-pre-wrap break-all border-t border-red-200 text-red-800">{ratesMsg.raw}</pre>
+          )}
+        </div>
+      )}
+
+      {ratesData && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl overflow-hidden">
+          <p className="px-4 pt-3 pb-2 text-xs font-semibold text-blue-700 flex items-center gap-2 flex-wrap">
+            <span>{ratesData.partner?.replace(/_/g, ' ')} — checked at {new Date(ratesData.checkedAt).toLocaleTimeString('en-IN')}</span>
+            {ratesData.draftId && (
+              <span className="font-mono bg-blue-100 px-1.5 py-0.5 rounded text-blue-800">Draft #{ratesData.draftId}</span>
+            )}
+          </p>
+          {(ratesData.deliveryBranch || ratesData.serviceOption) && (
+            <div className="px-4 pb-4 grid grid-cols-2 gap-3">
+              {ratesData.deliveryBranch && (
+                <div className="bg-white rounded-lg border border-blue-200 px-3 py-2">
+                  <p className="text-xs text-blue-500 font-medium mb-0.5">Delivery Branch</p>
+                  <p className="text-sm font-semibold text-zinc-800">{ratesData.deliveryBranch}</p>
+                </div>
+              )}
+              {ratesData.serviceOption && (
+                <div className="bg-white rounded-lg border border-blue-200 px-3 py-2">
+                  <p className="text-xs text-blue-500 font-medium mb-0.5">Service Lane</p>
+                  <p className="text-sm font-semibold text-zinc-800">{ratesData.serviceOption}</p>
+                </div>
+              )}
+              <p className="col-span-2 text-xs text-blue-600">DP World API confirms route only — pricing is billed separately per contract.</p>
+            </div>
+          )}
+          {ratesData.options && (
+            <div className="space-y-2 px-4 pb-4">
+              {ratesData.options.map(opt => (
+                <div key={opt.service} className="flex items-center justify-between text-sm">
+                  <div>
+                    <span className="font-medium text-zinc-800">{opt.service}</span>
+                    <span className="text-zinc-500 ml-2 text-xs">{opt.estimatedDays} days</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-semibold text-zinc-900">₹{opt.total.toLocaleString('en-IN')}</span>
+                    <span className="text-xs text-zinc-400 ml-1">(incl. GST)</span>
+                  </div>
+                </div>
+              ))}
+              {ratesData.note && <p className="text-xs text-zinc-400 mt-1">{ratesData.note}</p>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Actions ── */}
+      <div className="flex gap-3 justify-end">
+        <button type="button" onClick={handleCheckRates} disabled={ratesLoading}
+          className="px-6 py-3 border-2 border-blue-500 text-blue-600 font-semibold rounded-xl hover:bg-blue-50 disabled:opacity-60 transition-colors text-sm">
+          {ratesLoading ? 'Checking…' : 'Check Rates'}
+        </button>
         <button type="button" onClick={handleSubmit} disabled={loading}
           className="px-8 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-60 transition-colors text-sm">
           {loading ? 'Creating Booking…' : 'Create Booking'}

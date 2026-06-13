@@ -669,6 +669,30 @@ async function getDashboardStats(req, res) {
   }
 }
 
+// ─── Standalone rate check (no order required — used by direct booking form) ──
+
+async function checkRatesDirect(req, res) {
+  try {
+    const { partnerName = 'DP_WORLD', ...formData } = req.body;
+    const cred = await prisma.partnerCredential.findUnique({ where: { partner: partnerName } });
+    const adapter = getAdapter(partnerName);
+    if (typeof adapter.checkRates !== 'function') {
+      return failure(res, 'Rate check not supported for this partner', 400);
+    }
+    const result = await adapter.checkRates({
+      ...formData,
+      partnerName,
+      loginId: formData.loginId || cred?.loginId,
+      apiKey: cred?.apiKey,
+      apiSecret: cred?.apiSecret,
+      extraConfig: cred?.extraConfig,
+    });
+    return success(res, { rates: result }, 'Rates fetched from partner');
+  } catch (e) {
+    return failure(res, e.message || 'Failed to check rates', 500, e.rawResponse || e.message);
+  }
+}
+
 // ─── Live shipment detail (DP World, admin-only) ─────────────────────────────
 
 async function getLiveShipmentDetail(req, res) {
@@ -708,4 +732,5 @@ module.exports = {
   listMISReports, generateMIS, downloadMIS,
   listAdmins, createAdmin, updateAdmin, getDashboardStats,
   getLiveShipmentDetail,
+  checkRatesDirect,
 };
