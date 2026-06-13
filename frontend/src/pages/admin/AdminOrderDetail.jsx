@@ -413,7 +413,7 @@ export default function AdminOrderDetail() {
                     className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 border border-blue-200 rounded px-2 py-1 hover:bg-blue-50 disabled:opacity-50 transition-colors">
                     {syncLoading ? '…' : '↻ Refresh'}
                   </button>
-                  <button onClick={() => printDocket(order, liveDetail, true)}
+                  <button onClick={() => printDocket(order, liveDetail, false)}
                     className="inline-flex items-center gap-1 text-xs font-medium text-zinc-600 border border-zinc-200 rounded px-2 py-1 hover:bg-zinc-50 transition-colors">
                     🖨 Print Docket
                   </button>
