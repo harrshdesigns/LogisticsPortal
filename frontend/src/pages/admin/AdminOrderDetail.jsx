@@ -238,22 +238,33 @@ export default function AdminOrderDetail() {
 
   const handleDPWorldPrint = async () => {
     setDpwPrintLoading(true);
+    // Open blank tab NOW while the user gesture is active — browsers block window.open after await
+    const w = window.open('', '_blank');
+    if (!w) {
+      alert('Pop-up blocked. Please allow pop-ups for this site and try again.');
+      setDpwPrintLoading(false);
+      return;
+    }
+    w.document.write('<html><body style="font-family:sans-serif;padding:40px;color:#555">Loading DP World docket…</body></html>');
     try {
       const { data } = await api.get(`/admin/orders/${id}/dpworld-print`);
       const { html, printUrl, requiresPortalLogin } = data.data;
 
       if (html) {
-        // API key auth worked — open proxied HTML in new window, print triggers automatically
-        const w = window.open('', '_blank', 'width=900,height=700,scrollbars=yes');
-        if (w) { w.document.write(html); w.document.close(); }
+        w.document.open();
+        w.document.write(html);
+        w.document.close();
       } else if (printUrl) {
-        // Portal session required — open direct URL (admin must be logged into DP World portal)
-        window.open(printUrl, '_blank');
+        w.location.href = printUrl;
         if (requiresPortalLogin) {
-          alert('Opened DP World print page. If a login screen appears, please log in to the DP World ExpressTMS portal first, then try again.');
+          setTimeout(() => alert('If a DP World login screen appeared, log in to the ExpressTMS portal first, then click DP World Print again.'), 500);
         }
+      } else {
+        w.close();
+        alert('Could not retrieve print data from DP World.');
       }
     } catch (err) {
+      w.close();
       alert(err.response?.data?.message || 'Could not fetch DP World print');
     } finally {
       setDpwPrintLoading(false);

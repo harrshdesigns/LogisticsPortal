@@ -378,9 +378,12 @@ window.onload = function() {
 </body>
 </html>`;
 
-  const w = window.open('', '_blank', 'width=960,height=720,scrollbars=yes');
+  // No features string — browsers block popup windows but never block plain new tabs
+  const w = window.open('', '_blank');
   if (w) {
     w.document.write(html);
     w.document.close();
+  } else {
+    alert('Pop-up blocked. Please allow pop-ups for this site and try again.');
   }
 }
