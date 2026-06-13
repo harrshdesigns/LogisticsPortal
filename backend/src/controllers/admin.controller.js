@@ -755,6 +755,37 @@ async function checkRatesDirect(req, res) {
   }
 }
 
+// ─── DP World print page proxy (admin-only) ──────────────────────────────────
+
+async function getDPWorldPrint(req, res) {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id },
+      include: { shipment: true },
+    });
+    if (!order || !order.shipment) return failure(res, 'Order or shipment not found', 404);
+
+    const { partnerName, partnerDocketNo } = order.shipment;
+    if (partnerName !== 'DP_WORLD' || !partnerDocketNo) {
+      return failure(res, 'DP World print only available for DP World shipments', 400);
+    }
+
+    const cred = await prisma.partnerCredential.findUnique({ where: { partner: 'DP_WORLD' } });
+    const adapter = getAdapter('DP_WORLD');
+
+    const { html, printUrl, dpwId } = await adapter.getPrintContent(partnerDocketNo, {
+      apiKey: cred?.apiKey,
+      extraConfig: cred?.extraConfig,
+    });
+
+    if (!dpwId) return failure(res, 'Could not resolve DP World consignment ID', 502);
+
+    return success(res, { html: html || null, printUrl, dpwId, requiresPortalLogin: !html });
+  } catch (e) {
+    return failure(res, 'Failed to get DP World print', 500, e.message);
+  }
+}
+
 // ─── Live shipment detail (DP World, admin-only) ─────────────────────────────
 
 async function getLiveShipmentDetail(req, res) {
@@ -796,4 +827,5 @@ module.exports = {
   getLiveShipmentDetail,
   checkRatesDirect,
   syncTracking,
+  getDPWorldPrint,
 };

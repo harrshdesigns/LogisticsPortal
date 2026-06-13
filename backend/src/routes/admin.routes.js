@@ -9,7 +9,7 @@ const {
   createInvoice, listAdminInvoices, sendInvoice,
   listMISReports, generateMIS, downloadMIS,
   listAdmins, createAdmin, updateAdmin, getDashboardStats,
-  getLiveShipmentDetail, checkRatesDirect, syncTracking,
+  getLiveShipmentDetail, checkRatesDirect, syncTracking, getDPWorldPrint,
 } = require('../controllers/admin.controller');
 const {
   listSavedConsignors, createSavedConsignor, updateSavedConsignor, deleteSavedConsignor,
@@ -27,6 +27,7 @@ router.get('/orders/:id', getAdminOrder);
 router.post('/orders/:id/check-rates', checkRates);
 router.post('/orders/:id/assign', assignAndBook);
 router.get('/orders/:id/live-detail', getLiveShipmentDetail);
+router.get('/orders/:id/dpworld-print', getDPWorldPrint);
 router.post('/orders/:id/sync-tracking', syncTracking);
 router.post('/orders/:id/tracking', addTrackingEvent);
 router.patch('/orders/:id/status', updateOrderStatus);

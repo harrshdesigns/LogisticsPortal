@@ -237,6 +237,47 @@ const DPWorldAdapter = {
     };
   },
 
+  async getPrintContent(partnerDocketNo, credentials = {}) {
+    const creds = getCredentials(credentials);
+
+    // Step 1: resolve DP World internal consignment ID
+    let dpwId;
+    try {
+      const trackData = await dpwPost(
+        `${BASE_URL}/consignments/track.json`,
+        { lr: { number: partnerDocketNo } },
+        creds.apiKey, 20000,
+      );
+      dpwId = trackData?.lr?.id;
+    } catch (e) { return { html: null, printUrl: null, dpwId: null }; }
+
+    if (!dpwId) return { html: null, printUrl: null, dpwId: null };
+
+    const printUrl = `https://expresstms.dpworld.com/consignments/${dpwId}/print`;
+
+    // Step 2: try to fetch the print HTML with the API key
+    try {
+      const resp = await axios.get(printUrl, {
+        headers: { 'X-ShipX-API-Key': creds.apiKey, Accept: 'text/html' },
+        timeout: 15000,
+        maxRedirects: 2,
+        validateStatus: s => s < 400,
+      });
+
+      const ct = resp.headers['content-type'] || '';
+      if (ct.includes('text/html') && typeof resp.data === 'string' && resp.data.includes('<')) {
+        // Inject base href so relative assets (CSS/JS/images) load from DP World's servers
+        let html = resp.data;
+        if (!html.includes('<base ')) {
+          html = html.replace(/(<head[^>]*>)/i, '$1<base href="https://expresstms.dpworld.com/">');
+        }
+        return { html, printUrl, dpwId };
+      }
+    } catch (_) { /* portal may need cookie auth — fall through */ }
+
+    return { html: null, printUrl, dpwId };
+  },
+
   async getDetail(partnerDocketNo, credentials = {}) {
     const creds = getCredentials(credentials);
     let trackData;

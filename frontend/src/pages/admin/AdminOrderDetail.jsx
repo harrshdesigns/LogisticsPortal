@@ -85,6 +85,7 @@ export default function AdminOrderDetail() {
   const [chargesOpen, setChargesOpen] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const [dpwPrintLoading, setDpwPrintLoading] = useState(false);
 
   const fetchOrder = useCallback(() => {
     api.get(`/admin/orders/${id}`)
@@ -233,6 +234,30 @@ export default function AdminOrderDetail() {
       .then(({ data }) => setLiveDetail(data.data.detail))
       .catch(() => setLiveDetail(null))
       .finally(() => setLiveDetailLoading(false));
+  };
+
+  const handleDPWorldPrint = async () => {
+    setDpwPrintLoading(true);
+    try {
+      const { data } = await api.get(`/admin/orders/${id}/dpworld-print`);
+      const { html, printUrl, requiresPortalLogin } = data.data;
+
+      if (html) {
+        // API key auth worked — open proxied HTML in new window, print triggers automatically
+        const w = window.open('', '_blank', 'width=900,height=700,scrollbars=yes');
+        if (w) { w.document.write(html); w.document.close(); }
+      } else if (printUrl) {
+        // Portal session required — open direct URL (admin must be logged into DP World portal)
+        window.open(printUrl, '_blank');
+        if (requiresPortalLogin) {
+          alert('Opened DP World print page. If a login screen appears, please log in to the DP World ExpressTMS portal first, then try again.');
+        }
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Could not fetch DP World print');
+    } finally {
+      setDpwPrintLoading(false);
+    }
   };
 
   const handleSyncTracking = async () => {
@@ -725,12 +750,27 @@ export default function AdminOrderDetail() {
                   {order.shipment.bookedAt && <p className="text-xs text-zinc-400">{fmtIST(order.shipment.bookedAt)}</p>}
                   {order.shipment.bookedByAdmin && <p className="text-xs text-zinc-400">by {order.shipment.bookedByAdmin.name}</p>}
                 </div>
-                {isDPWorld && partnerDocketNo && (
-                  <div className="text-right">
-                    <p className="text-xs text-zinc-400 mb-0.5">LR Number <span className="bg-amber-100 text-amber-600 text-xs px-1.5 py-0.5 rounded ml-1">Admin Only</span></p>
-                    <p className="text-xl font-mono font-bold text-zinc-900 tracking-wider">{partnerDocketNo}</p>
-                  </div>
-                )}
+                <div className="flex items-end gap-4 flex-wrap">
+                  {isDPWorld && partnerDocketNo && (
+                    <div className="text-right">
+                      <p className="text-xs text-zinc-400 mb-0.5">LR Number <span className="bg-amber-100 text-amber-600 text-xs px-1.5 py-0.5 rounded ml-1">Admin Only</span></p>
+                      <p className="text-xl font-mono font-bold text-zinc-900 tracking-wider">{partnerDocketNo}</p>
+                    </div>
+                  )}
+                  {isDPWorld && partnerDocketNo && (
+                    <button
+                      onClick={handleDPWorldPrint}
+                      disabled={dpwPrintLoading}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-700 text-white text-sm font-semibold rounded-lg hover:bg-blue-800 disabled:opacity-50 transition-colors shadow-sm"
+                    >
+                      {dpwPrintLoading ? (
+                        <><div className="h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Fetching…</>
+                      ) : (
+                        <>🖨 DP World Print</>
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Live data loading */}
